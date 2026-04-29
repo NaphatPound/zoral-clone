@@ -194,6 +194,97 @@ function downloadTextFile(filename: string, text: string, type = "text/plain") {
   URL.revokeObjectURL(url);
 }
 
+const LAYOUT_COLUMN_WIDTH = 320;
+const LAYOUT_ROW_HEIGHT = 150;
+
+// Layered BFS layout: roots at column 0, downstream nodes shift right by their
+// longest path from any root. Within a column, nodes stack vertically. Cycles
+// are tolerated — once a node has been placed at a level, it isn't revisited.
+function computeAutoLayout(
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): Map<string, { x: number; y: number }> {
+  const incoming = new Map<string, Set<string>>();
+  const outgoing = new Map<string, Set<string>>();
+  for (const node of nodes) {
+    incoming.set(node.id, new Set());
+    outgoing.set(node.id, new Set());
+  }
+  for (const edge of edges) {
+    if (!incoming.has(edge.target) || !outgoing.has(edge.source)) continue;
+    incoming.get(edge.target)!.add(edge.source);
+    outgoing.get(edge.source)!.add(edge.target);
+  }
+
+  const level = new Map<string, number>();
+  const queue: string[] = [];
+  for (const node of nodes) {
+    if ((incoming.get(node.id)?.size ?? 0) === 0) {
+      level.set(node.id, 0);
+      queue.push(node.id);
+    }
+  }
+  // Fallback: if every node has an incoming edge (pure cycle), seed with the
+  // first node so the layout still produces something.
+  if (queue.length === 0 && nodes.length > 0) {
+    level.set(nodes[0].id, 0);
+    queue.push(nodes[0].id);
+  }
+
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    const current = level.get(id)!;
+    for (const next of outgoing.get(id) ?? []) {
+      const seen = level.get(next);
+      if (seen === undefined || seen < current + 1) {
+        level.set(next, current + 1);
+        queue.push(next);
+      }
+    }
+  }
+
+  // Any node not reached (disconnected component) drops at the right edge in
+  // its own column so it's still visible.
+  let maxLevel = 0;
+  for (const value of level.values()) {
+    if (value > maxLevel) maxLevel = value;
+  }
+  const orphanLevel = maxLevel + 1;
+  for (const node of nodes) {
+    if (!level.has(node.id)) {
+      level.set(node.id, orphanLevel);
+    }
+  }
+
+  const byLevel = new Map<number, string[]>();
+  for (const node of nodes) {
+    const lvl = level.get(node.id)!;
+    if (!byLevel.has(lvl)) byLevel.set(lvl, []);
+    byLevel.get(lvl)!.push(node.id);
+  }
+
+  const positions = new Map<string, { x: number; y: number }>();
+  let tallestColumn = 0;
+  for (const ids of byLevel.values()) {
+    if (ids.length > tallestColumn) tallestColumn = ids.length;
+  }
+  const columnHeight = Math.max(1, tallestColumn) * LAYOUT_ROW_HEIGHT;
+
+  for (const [lvl, ids] of byLevel) {
+    const total = ids.length;
+    const usedHeight = total * LAYOUT_ROW_HEIGHT;
+    const startY = (columnHeight - usedHeight) / 2;
+    ids.forEach((id, index) => {
+      positions.set(id, {
+        x: lvl * LAYOUT_COLUMN_WIDTH,
+        y: startY + index * LAYOUT_ROW_HEIGHT,
+      });
+    });
+  }
+
+  return positions;
+}
+
 function syncWorkflowPositions(
   workflow: Workflow,
   nodes: FlowNode[],
@@ -451,6 +542,30 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
     setSelection(null);
     setEdgeSelection(null);
     setCreateMenu(null);
+  };
+
+  const handleAutoLayout = () => {
+    const positions = computeAutoLayout(workflowState.nodes, workflowState.edges);
+    if (positions.size === 0) return;
+    setWorkflowState((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) => {
+        const next = positions.get(node.id);
+        return next ? { ...node, position: next } : node;
+      }),
+    }));
+    setNodes((current) =>
+      current.map((node) => {
+        const next = positions.get(node.id);
+        if (!next) return node;
+        const nextData = { ...node.data.node, position: next };
+        return { ...node, position: next, data: { ...node.data, node: nextData } };
+      }),
+    );
+    setCreateMenu(null);
+    requestAnimationFrame(() => {
+      reactFlowInstance?.fitView({ padding: 0.2, duration: 400 });
+    });
   };
 
   const openAssistant = () => {
@@ -725,6 +840,23 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
             }}
           >
             AI Assistant
+          </button>
+          <button
+            type="button"
+            onClick={handleAutoLayout}
+            className="rounded-md border border-indigo-400 bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-indigo-500"
+            style={{
+              borderRadius: 8,
+              border: "1px solid #818cf8",
+              background: "#4f46e5",
+              padding: "10px 14px",
+              color: "#ffffff",
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            Auto Layout
           </button>
           <input
             type="search"
