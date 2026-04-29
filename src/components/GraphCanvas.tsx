@@ -1,0 +1,930 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import ReactFlow, {
+  Background,
+  type Connection,
+  Controls,
+  type HandleType,
+  MiniMap,
+  type Edge,
+  type Node,
+  type OnConnectStartParams,
+  type ReactFlowInstance,
+  useEdgesState,
+  useNodesState,
+} from "reactflow";
+import {
+  generateWorkflowDocumentation,
+  type WorkflowDocumentation,
+} from "@/lib/documentation";
+import type { Workflow, WorkflowEdge, WorkflowNode } from "@/lib/types";
+import { toReactFlow } from "@/lib/parser";
+import NodeCard from "./NodeCard";
+import DetailsPanel from "./DetailsPanel";
+import Legend from "./Legend";
+import StaticGraphPreview from "./StaticGraphPreview";
+import WorkflowAssistantPanel from "./WorkflowAssistantPanel";
+import WorkflowEdgeView, { type FlowEdgeData } from "./WorkflowEdge";
+
+const nodeTypes = { zoralNode: NodeCard };
+const edgeTypes = { workflowEdge: WorkflowEdgeView };
+type FlowNodeData = { label: string; node: WorkflowNode; dim?: boolean };
+type FlowNode = Node<FlowNodeData>;
+type FlowEdge = Edge<FlowEdgeData>;
+type SelectedItem =
+  | { type: "node"; id: string }
+  | { type: "edge"; id: string }
+  | null;
+type CreateMenuState = {
+  x: number;
+  y: number;
+  flowPosition: { x: number; y: number };
+  pendingConnection?: PendingConnection;
+};
+type PendingConnection = {
+  nodeId: string;
+  handleId: string | null;
+  handleType: HandleType;
+};
+type NodeTemplate = {
+  key: string;
+  label: string;
+  hint: string;
+  create: (id: string, position: { x: number; y: number }) => WorkflowNode;
+};
+type AssistantGenerationStatus = {
+  state: "idle" | "loading" | "ready" | "fallback" | "error";
+  source: "local" | "gemini" | "fallback";
+  message?: string;
+};
+type WorkflowAssistantResponse = {
+  document: WorkflowDocumentation;
+  source: "gemini" | "fallback";
+  warning?: string;
+  log?: string;
+  model?: string;
+};
+
+const NODE_TEMPLATES: NodeTemplate[] = [
+  {
+    key: "start",
+    label: "Start Event",
+    hint: "Entry point for a workflow branch.",
+    create: (id, position) => ({
+      id,
+      kind: "start",
+      tag: "MessageStartEvent",
+      name: `Start ${id}`,
+      position,
+      boundaryEvents: [],
+      attributes: {},
+    }),
+  },
+  {
+    key: "component",
+    label: "Component Task",
+    hint: "Call a component with input/output scripts.",
+    create: (id, position) => ({
+      id,
+      kind: "componentTask",
+      tag: "ComponentTask",
+      name: `Component ${id}`,
+      description: "New component task",
+      componentName: "NewComponent",
+      script: "return input;",
+      processOutputScript: "return output;",
+      position,
+      boundaryEvents: [],
+      attributes: {
+        ImmediateResponse: "false",
+        ValidateOutput: "false",
+      },
+    }),
+  },
+  {
+    key: "script",
+    label: "Script Task",
+    hint: "Run custom code inside the workflow.",
+    create: (id, position) => ({
+      id,
+      kind: "scriptTask",
+      tag: "ScriptTask",
+      name: `Script ${id}`,
+      description: "New script task",
+      script: "return null;",
+      position,
+      boundaryEvents: [],
+      attributes: {
+        ImmediateResponse: "false",
+        ValidateOutput: "false",
+      },
+    }),
+  },
+  {
+    key: "gateway",
+    label: "Exclusive Gateway",
+    hint: "Branch the workflow with if/else conditions.",
+    create: (id, position) => ({
+      id,
+      kind: "gateway",
+      tag: "Gateway",
+      name: `Gateway ${id}`,
+      position,
+      boundaryEvents: [],
+      attributes: {
+        GatewayType: "Exclusive",
+      },
+    }),
+  },
+  {
+    key: "condition",
+    label: "Condition (if/else)",
+    hint: "Inline branch label — connect a gateway in and a target out.",
+    create: (id, position) => ({
+      id,
+      kind: "condition",
+      tag: "If",
+      name: "If",
+      description: "return true;",
+      position,
+      boundaryEvents: [],
+      attributes: { branch: "if" },
+    }),
+  },
+  {
+    key: "end",
+    label: "End Event",
+    hint: "Terminate the workflow path.",
+    create: (id, position) => ({
+      id,
+      kind: "end",
+      tag: "EndEvent",
+      name: `End ${id}`,
+      position,
+      boundaryEvents: [],
+      attributes: {},
+    }),
+  },
+];
+
+function downloadJson(workflow: Workflow) {
+  const blob = new Blob([JSON.stringify(workflow, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const name = workflow.meta.runtimeName ?? "workflow";
+  a.href = url;
+  a.download = `${name}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadTextFile(filename: string, text: string, type = "text/plain") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function syncWorkflowPositions(
+  workflow: Workflow,
+  nodes: FlowNode[],
+): Workflow {
+  const positions = new Map(
+    nodes.map((node) => [node.id, { ...node.position }] as const),
+  );
+  return {
+    ...workflow,
+    nodes: workflow.nodes.map((node) => ({
+      ...node,
+      position: positions.get(node.id) ?? node.position,
+    })),
+  };
+}
+
+function makeFlowNode(node: WorkflowNode): FlowNode {
+  return {
+    id: node.id,
+    position: node.position ?? { x: 0, y: 0 },
+    data: { label: node.name, node },
+    type: "zoralNode",
+  };
+}
+
+function makeFlowEdge(edge: WorkflowEdge): FlowEdge {
+  return {
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle:
+      edge.label === "if" || edge.label === "else" ? edge.label : undefined,
+    type: "workflowEdge",
+    animated: edge.kind === "boundary",
+    style: edge.kind === "boundary" ? { stroke: "#ef4444" } : undefined,
+    data: { edge },
+  };
+}
+
+function updateWorkflowNode(
+  workflow: Workflow,
+  nodeId: string,
+  patch: Partial<
+    Pick<
+      WorkflowNode,
+      "name" | "description" | "componentName" | "script" | "processOutputScript"
+    >
+  >,
+): Workflow {
+  return {
+    ...workflow,
+    nodes: workflow.nodes.map((node) =>
+      node.id === nodeId ? { ...node, ...patch } : node,
+    ),
+  };
+}
+
+function updateWorkflowEdge(
+  workflow: Workflow,
+  edgeId: string,
+  patch: Partial<Pick<WorkflowEdge, "label" | "condition" | "labelOffset">>,
+): Workflow {
+  return {
+    ...workflow,
+    edges: workflow.edges.map((edge) =>
+      edge.id === edgeId ? { ...edge, ...patch } : edge,
+    ),
+  };
+}
+
+function nextNodeId(workflow: Workflow): string {
+  const numericIds = workflow.nodes
+    .map((node) => Number(node.id))
+    .filter((value) => Number.isInteger(value));
+  if (numericIds.length > 0) {
+    let candidate = Math.max(...numericIds) + 1;
+    while (workflow.nodes.some((node) => node.id === String(candidate))) {
+      candidate += 1;
+    }
+    return String(candidate);
+  }
+  let candidate = workflow.nodes.length + 1;
+  let fallback = `node-${candidate}`;
+  while (workflow.nodes.some((node) => node.id === fallback)) {
+    candidate += 1;
+    fallback = `node-${candidate}`;
+  }
+  return fallback;
+}
+
+function edgeIdFromConnection(connection: Connection): string | null {
+  if (!connection.source || !connection.target) return null;
+  return `${connection.source}->${connection.target}:sequence:`;
+}
+
+function clientPointFromEvent(
+  event: MouseEvent | TouchEvent,
+): { x: number; y: number } | null {
+  if ("clientX" in event) {
+    return { x: event.clientX, y: event.clientY };
+  }
+  const touch = event.changedTouches[0] ?? event.touches[0];
+  if (!touch) return null;
+  return { x: touch.clientX, y: touch.clientY };
+}
+
+function buildPendingConnection(
+  params: OnConnectStartParams,
+): PendingConnection | null {
+  if (!params.nodeId || !params.handleType) return null;
+  return {
+    nodeId: params.nodeId,
+    handleId: params.handleId,
+    handleType: params.handleType,
+  };
+}
+
+function connectionFromPending(
+  pending: PendingConnection,
+  newNodeId: string,
+): Connection {
+  if (pending.handleType === "source") {
+    return {
+      source: pending.nodeId,
+      sourceHandle: pending.handleId,
+      target: newNodeId,
+      targetHandle: null,
+    };
+  }
+  return {
+    source: newNodeId,
+    sourceHandle: null,
+    target: pending.nodeId,
+    targetHandle: pending.handleId,
+  };
+}
+
+export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const pendingConnectionRef = useRef<PendingConnection | null>(null);
+  const connectionCompletedRef = useRef(false);
+  const suppressNextPaneClickRef = useRef(false);
+  const initialFlow = useMemo(() => toReactFlow(workflow), [workflow]);
+  const [workflowState, setWorkflowState] = useState<Workflow>(() =>
+    syncWorkflowPositions(workflow, initialFlow.nodes as FlowNode[]),
+  );
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>(
+    initialFlow.nodes as FlowNode[],
+  );
+  const [edges, setEdges] = useEdgesState<FlowEdgeData>(
+    initialFlow.edges as FlowEdge[],
+  );
+  const [selection, setSelection] = useState<SelectedItem>(null);
+  const [search, setSearch] = useState("");
+  const [createMenu, setCreateMenu] = useState<CreateMenuState | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{
+    state: "idle" | "saving" | "saved" | "error";
+    message?: string;
+  }>({ state: "idle" });
+  const [reactFlowInstance, setReactFlowInstance] = useState<
+    ReactFlowInstance<FlowNodeData, FlowEdgeData> | null
+  >(null);
+  const documentation = useMemo(
+    () => generateWorkflowDocumentation(workflowState),
+    [workflowState],
+  );
+  const [assistantDocument, setAssistantDocument] =
+    useState<WorkflowDocumentation>(documentation);
+  const [assistantGenerationStatus, setAssistantGenerationStatus] =
+    useState<AssistantGenerationStatus>({
+      state: "idle",
+      source: "local",
+    });
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!assistantOpen) {
+      setAssistantDocument(documentation);
+      setAssistantGenerationStatus({ state: "idle", source: "local" });
+    }
+  }, [assistantOpen, documentation]);
+
+  useEffect(() => {
+    const nextFlow = toReactFlow(workflow);
+    setWorkflowState(
+      syncWorkflowPositions(workflow, nextFlow.nodes as FlowNode[]),
+    );
+    setNodes(nextFlow.nodes as FlowNode[]);
+    setEdges(nextFlow.edges as FlowEdge[]);
+    setSelection(null);
+    setCreateMenu(null);
+    pendingConnectionRef.current = null;
+    connectionCompletedRef.current = false;
+    suppressNextPaneClickRef.current = false;
+    setAssistantOpen(false);
+    setAssistantDocument(generateWorkflowDocumentation(workflow));
+    setAssistantGenerationStatus({ state: "idle", source: "local" });
+    setSaveStatus({ state: "idle" });
+  }, [workflow, setEdges, setNodes]);
+
+  const openCreateMenu = (
+    clientPoint: { x: number; y: number },
+    pendingConnection?: PendingConnection,
+  ) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const flowPosition = reactFlowInstance
+      ? reactFlowInstance.screenToFlowPosition(clientPoint)
+      : {
+          x: clientPoint.x - (rect?.left ?? 0),
+          y: clientPoint.y - (rect?.top ?? 0),
+        };
+    const rawX = clientPoint.x - (rect?.left ?? 0);
+    const rawY = clientPoint.y - (rect?.top ?? 0);
+    const maxX = Math.max(12, (rect?.width ?? 320) - 292);
+    const maxY = Math.max(12, (rect?.height ?? 360) - 380);
+
+    setSelection(null);
+    setEdgeSelection(null);
+    setCreateMenu({
+      x: Math.min(Math.max(12, rawX), maxX),
+      y: Math.min(Math.max(12, rawY), maxY),
+      flowPosition,
+      pendingConnection,
+    });
+  };
+
+  const setEdgeSelection = (edgeId: string | null) => {
+    setEdges((current) =>
+      current.map((edge) =>
+        edge.selected === (edge.id === edgeId)
+          ? edge
+          : { ...edge, selected: edge.id === edgeId },
+      ),
+    );
+  };
+
+  const handleNodeSelection = (nodeId: string) => {
+    setSelection({ type: "node", id: nodeId });
+    setEdgeSelection(null);
+    setCreateMenu(null);
+  };
+
+  const handleEdgeSelection = (edgeId: string) => {
+    setSelection({ type: "edge", id: edgeId });
+    setEdgeSelection(edgeId);
+    setCreateMenu(null);
+  };
+
+  const clearSelection = () => {
+    setSelection(null);
+    setEdgeSelection(null);
+    setCreateMenu(null);
+  };
+
+  const openAssistant = () => {
+    setCreateMenu(null);
+    setAssistantDocument(documentation);
+    setAssistantOpen(true);
+    setAssistantGenerationStatus({
+      state: "idle",
+      source: "local",
+      message: "Showing local draft. Click Generate to run Gemini CLI.",
+    });
+    setSaveStatus({ state: "idle" });
+  };
+
+  const handleGenerate = () => {
+    setAssistantGenerationStatus({
+      state: "loading",
+      source: "local",
+      message: "Generating with Gemini CLI...",
+    });
+    setSaveStatus({ state: "idle" });
+    void requestAssistantDocument(workflowState);
+  };
+
+  const requestAssistantDocument = async (currentWorkflow: Workflow) => {
+    const localDocument = generateWorkflowDocumentation(currentWorkflow);
+    setAssistantDocument(localDocument);
+
+    try {
+      const response = await fetch("/api/workflow-assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflow: currentWorkflow,
+        }),
+      });
+      const payload = (await response.json()) as
+        | WorkflowAssistantResponse
+        | { error?: string };
+
+      if (!response.ok || !("document" in payload)) {
+        throw new Error(
+          "error" in payload && typeof payload.error === "string"
+            ? payload.error
+            : "Failed to generate assistant output",
+        );
+      }
+
+      setAssistantDocument(payload.document);
+      if (payload.source === "gemini") {
+        setAssistantGenerationStatus({
+          state: "ready",
+          source: "gemini",
+          message: payload.model
+            ? `Generated by Gemini CLI (${payload.model}).`
+            : "Generated by Gemini CLI.",
+        });
+        return;
+      }
+
+      setAssistantGenerationStatus({
+        state: "fallback",
+        source: "fallback",
+        message:
+          payload.warning ??
+          "Gemini CLI was unavailable, so the local fallback summary is shown.",
+      });
+    } catch (error) {
+      setAssistantDocument(localDocument);
+      setAssistantGenerationStatus({
+        state: "error",
+        source: "local",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate assistant output",
+      });
+    }
+  };
+
+  const saveDocumentation = async () => {
+    setSaveStatus({ state: "saving", message: "Saving documentation..." });
+    try {
+      const response = await fetch("/api/workflow-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: assistantDocument.filename,
+          markdown: assistantDocument.markdown,
+        }),
+      });
+      const payload = (await response.json()) as {
+        path?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to save documentation");
+      }
+      setSaveStatus({
+        state: "saved",
+        message: `Saved to ${payload.path}`,
+      });
+    } catch (error) {
+      setSaveStatus({
+        state: "error",
+        message:
+          error instanceof Error ? error.message : "Failed to save documentation",
+      });
+    }
+  };
+
+  const handleEdgeChange = (
+    edgeId: string,
+    patch: Partial<Pick<WorkflowEdge, "label" | "condition" | "labelOffset">>,
+  ) => {
+    setWorkflowState((current) => updateWorkflowEdge(current, edgeId, patch));
+    setEdges((current) =>
+      current.map((edge) => {
+        if (edge.id !== edgeId) return edge;
+        const currentEdge = edge.data!.edge;
+        return {
+          ...edge,
+          data: {
+            ...edge.data,
+            edge: { ...currentEdge, ...patch },
+          },
+        };
+      }),
+    );
+  };
+
+  const selectedNode =
+    selection?.type === "node"
+      ? workflowState.nodes.find((node) => node.id === selection.id) ?? null
+      : null;
+  const selectedEdge =
+    selection?.type === "edge"
+      ? workflowState.edges.find((edge) => edge.id === selection.id) ?? null
+      : null;
+
+  const addNodeFromTemplate = (template: NodeTemplate) => {
+    const menu = createMenu;
+    if (!menu) return;
+    const nodeId = nextNodeId(workflowState);
+    const node = template.create(nodeId, menu.flowPosition);
+    setWorkflowState((current) => ({
+      ...current,
+      nodes: [...current.nodes, node],
+    }));
+    setNodes((current) => [...current, makeFlowNode(node)]);
+    if (menu.pendingConnection) {
+      handleConnect(connectionFromPending(menu.pendingConnection, nodeId));
+    }
+    handleNodeSelection(nodeId);
+  };
+
+  const handleConnect = (connection: Connection) => {
+    connectionCompletedRef.current = true;
+    pendingConnectionRef.current = null;
+    const edgeId = edgeIdFromConnection(connection);
+    if (!edgeId || !connection.source || !connection.target) return;
+    const sourceId = connection.source;
+    const targetId = connection.target;
+    const workflowEdge: WorkflowEdge = {
+      id: edgeId,
+      source: sourceId,
+      target: targetId,
+      kind: "sequence",
+    };
+
+    setWorkflowState((current) => {
+      if (current.edges.some((edge) => edge.id === edgeId)) {
+        return current;
+      }
+      return {
+        ...current,
+        nodes: current.nodes.map((node) =>
+          node.id === sourceId && node.kind !== "gateway"
+            ? { ...node, nextId: targetId }
+            : node,
+        ),
+        edges: [...current.edges, workflowEdge],
+      };
+    });
+    setEdges((current) => {
+      if (current.some((edge) => edge.id === edgeId)) return current;
+      return [...current, makeFlowEdge(workflowEdge)];
+    });
+  };
+
+  const { visibleNodes, visibleEdges } = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const matches = new Set<string>();
+    const edgeMatches = new Set<string>();
+
+    for (const n of nodes) {
+      const node = n.data.node;
+      if (
+        node.id.includes(term) ||
+        node.name.toLowerCase().includes(term) ||
+        (node.componentName ?? "").toLowerCase().includes(term)
+      ) {
+        matches.add(node.id);
+      }
+    }
+
+    for (const edge of edges) {
+      const text = `${edge.data!.edge.label ?? ""} ${
+        edge.data!.edge.condition ?? ""
+      }`.toLowerCase();
+      if (term && text.includes(term)) {
+        edgeMatches.add(edge.id);
+        matches.add(edge.source);
+        matches.add(edge.target);
+      }
+    }
+
+    const rfNodes: FlowNode[] = nodes.map((n) => ({
+      ...n,
+      data: { ...n.data, dim: term ? !matches.has(n.id) : false },
+    }));
+    const rfEdges: FlowEdge[] = edges.map((e) => ({
+      ...e,
+      data: {
+        edge: e.data!.edge,
+        onSelect: handleEdgeSelection,
+        onChange: handleEdgeChange,
+      },
+      style:
+        !term || edgeMatches.has(e.id) || (matches.has(e.source) && matches.has(e.target))
+          ? e.style
+          : { ...(e.style ?? {}), opacity: 0.15 },
+    }));
+    return { visibleNodes: rfNodes, visibleEdges: rfEdges };
+  }, [edges, nodes, search]);
+
+  return (
+    <div
+      className="flex h-screen w-screen"
+      style={{ display: "flex", width: "100vw", height: "100vh", color: "#e2e8f0" }}
+    >
+      <div
+        ref={canvasRef}
+        className="relative flex-1"
+        style={{ position: "relative", flex: 1, minWidth: 0, background: "#0b1020" }}
+      >
+        <div
+          className="absolute right-4 top-4 z-10 flex items-center gap-2"
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <button
+            type="button"
+            onClick={openAssistant}
+            className="rounded-md border border-red-500 bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-red-500"
+            style={{
+              borderRadius: 8,
+              border: "1px solid #ef4444",
+              background: "#dc2626",
+              padding: "10px 14px",
+              color: "#ffffff",
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            AI Assistant
+          </button>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search nodes…"
+            className="rounded-md border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 outline-none backdrop-blur focus:border-sky-400"
+            style={{
+              width: 210,
+              borderRadius: 8,
+              border: "1px solid rgba(71, 85, 105, 0.95)",
+              background: "rgba(15, 23, 42, 0.88)",
+              padding: "10px 12px",
+              color: "#e2e8f0",
+              fontSize: 14,
+              outline: "none",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => downloadJson(workflowState)}
+            className="rounded-md border border-sky-400 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-sky-500"
+            style={{
+              borderRadius: 8,
+              border: "1px solid #38bdf8",
+              background: "#0284c7",
+              padding: "10px 14px",
+              color: "#ffffff",
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            Download JSON
+          </button>
+        </div>
+        {createMenu ? (
+          <div
+            className="absolute z-20 w-[280px] rounded-xl border border-slate-700 bg-slate-950/95 p-2 shadow-2xl backdrop-blur"
+            style={{ left: createMenu.x, top: createMenu.y }}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            <div className="px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+              {createMenu.pendingConnection ? "Create And Connect" : "Create Node"}
+            </div>
+            <div className="mb-2 px-2 text-[11px] text-slate-500">
+              {createMenu.pendingConnection
+                ? "Select a template to create a new node and attach the dragged connection."
+                : "Select a workflow template to insert at this canvas position."}
+            </div>
+            <div className="space-y-1">
+              {NODE_TEMPLATES.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  onClick={() => addNodeFromTemplate(template)}
+                  className="block w-full rounded-lg border border-slate-800 px-3 py-2 text-left hover:border-sky-500 hover:bg-slate-900"
+                >
+                  <div className="text-sm font-medium text-slate-100">
+                    {template.label}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-400">
+                    {template.hint}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <Legend />
+        {assistantOpen ? (
+          <WorkflowAssistantPanel
+            document={assistantDocument}
+            onClose={() => setAssistantOpen(false)}
+            onDownload={() =>
+              downloadTextFile(
+                assistantDocument.filename,
+                assistantDocument.markdown,
+                "text/markdown",
+              )
+            }
+            onGenerate={handleGenerate}
+            onSave={saveDocumentation}
+            saveStatus={saveStatus}
+            generationStatus={assistantGenerationStatus}
+          />
+        ) : null}
+        {!hydrated ? <StaticGraphPreview workflow={workflowState} /> : null}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 10,
+            width: "100%",
+            height: "100%",
+            opacity: hydrated ? 1 : 0,
+          }}
+        >
+          <ReactFlow
+            nodes={visibleNodes}
+            edges={visibleEdges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            connectionRadius={60}
+            onInit={setReactFlowInstance}
+            onConnect={handleConnect}
+            onConnectStart={(_, params) => {
+              pendingConnectionRef.current = buildPendingConnection(params);
+              connectionCompletedRef.current = false;
+            }}
+            onConnectEnd={(event) => {
+              const pending = pendingConnectionRef.current;
+              const completed = connectionCompletedRef.current;
+              pendingConnectionRef.current = null;
+              connectionCompletedRef.current = false;
+              if (completed || !pending) return;
+
+              const target = event.target;
+              if (
+                target instanceof Element &&
+                (target.closest(".react-flow__node") ||
+                  target.closest(".react-flow__handle") ||
+                  target.closest(".react-flow__edge"))
+              ) {
+                return;
+              }
+
+              const point = clientPointFromEvent(event);
+              if (!point) return;
+              suppressNextPaneClickRef.current = true;
+              openCreateMenu(point, pending);
+            }}
+            onNodesChange={onNodesChange}
+            onNodeClick={(_, node) => {
+              handleNodeSelection(node.id);
+            }}
+            onPaneContextMenu={(event) => {
+              event.preventDefault();
+              openCreateMenu({ x: event.clientX, y: event.clientY });
+            }}
+            onEdgeClick={(_, edge) => {
+              handleEdgeSelection(edge.id);
+            }}
+            onNodeDragStop={(_, node) => {
+              setWorkflowState((current) =>
+                syncWorkflowPositions(current, [node as FlowNode]),
+              );
+            }}
+            onPaneClick={() => {
+              if (suppressNextPaneClickRef.current) {
+                suppressNextPaneClickRef.current = false;
+                return;
+              }
+              clearSelection();
+            }}
+          >
+            <Background color="#1f2937" gap={24} />
+            <MiniMap pannable zoomable />
+            <Controls />
+          </ReactFlow>
+        </div>
+      </div>
+      <aside
+        className="w-[400px] border-l border-slate-700 bg-slate-900"
+        style={{
+          width: 400,
+          borderLeft: "1px solid rgba(51, 65, 85, 0.95)",
+          background: "#0f172a",
+          color: "#e2e8f0",
+        }}
+      >
+        <DetailsPanel
+          node={selectedNode}
+          edge={selectedEdge}
+          onNodeChange={(patch) => {
+            if (selection?.type !== "node") return;
+            setWorkflowState((current) =>
+              updateWorkflowNode(current, selection.id, patch),
+            );
+            setNodes((current) =>
+              current.map((node) => {
+                if (node.id !== selection.id) return node;
+                const nextNode = { ...node.data.node, ...patch };
+                return {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    label: nextNode.name,
+                    node: nextNode,
+                  },
+                };
+              }),
+            );
+          }}
+          onEdgeChange={(patch) => {
+            if (selection?.type !== "edge") return;
+            handleEdgeChange(selection.id, patch);
+          }}
+        />
+      </aside>
+    </div>
+  );
+}

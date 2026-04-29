@@ -1,0 +1,584 @@
+[
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "1",
+    "HorizontalPosition": -1430.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "3"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "10",
+    "HorizontalPosition": 710.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "9"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "11",
+    "HorizontalPosition": 1630.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "5"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "12",
+    "HorizontalPosition": 1630.0,
+    "VerticalPosition": 390.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "top",
+        "ConnectionTo": "bottom",
+        "ConnectionToId": "11"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "13",
+    "HorizontalPosition": 1380.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "11"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "14",
+    "HorizontalPosition": -370.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "bottom",
+        "ConnectionTo": "top",
+        "ConnectionToId": "16"
+      },
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "17"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "15",
+    "HorizontalPosition": 10.0,
+    "VerticalPosition": 240.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "4"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "16",
+    "HorizontalPosition": -370.0,
+    "VerticalPosition": 240.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "22"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "17",
+    "HorizontalPosition": -100.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "4"
+      },
+      {
+        "ConnectionFrom": "top",
+        "ConnectionTo": "top",
+        "ConnectionToId": "11"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "18",
+    "HorizontalPosition": -970.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "20"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "19",
+    "HorizontalPosition": -670.0,
+    "VerticalPosition": -80.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "21"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "2",
+    "HorizontalPosition": 2160.0,
+    "VerticalPosition": 90.0,
+    "Connections": []
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "20",
+    "HorizontalPosition": -790.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "top",
+        "ConnectionTo": "left",
+        "ConnectionToId": "19"
+      },
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "14"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "21",
+    "HorizontalPosition": -480.0,
+    "VerticalPosition": -80.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "top",
+        "ConnectionToId": "14"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "22",
+    "HorizontalPosition": -180.0,
+    "VerticalPosition": 240.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "15"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "3",
+    "HorizontalPosition": -1230.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "18"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "4",
+    "HorizontalPosition": 180.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "7"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "5",
+    "HorizontalPosition": 1870.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "2"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "6",
+    "HorizontalPosition": 1130.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "13"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "7",
+    "HorizontalPosition": 380.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "bottom",
+        "ConnectionTo": "top",
+        "ConnectionToId": "8"
+      },
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "10"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "8",
+    "HorizontalPosition": 380.0,
+    "VerticalPosition": 240.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "10"
+      }
+    ]
+  },
+  {
+    "ConnectionFrom1": null,
+    "ConnectionFrom2": null,
+    "ConnectionFrom3": null,
+    "ConnectionFrom4": null,
+    "ConnectionTo1": null,
+    "ConnectionTo2": null,
+    "ConnectionTo3": null,
+    "ConnectionTo4": null,
+    "ConnectionToId1": null,
+    "ConnectionToId2": null,
+    "ConnectionToId3": null,
+    "ConnectionToId4": null,
+    "ElementId": "9",
+    "HorizontalPosition": 920.0,
+    "VerticalPosition": 90.0,
+    "Connections": [
+      {
+        "ConnectionFrom": "right",
+        "ConnectionTo": "left",
+        "ConnectionToId": "6"
+      },
+      {
+        "ConnectionFrom": "boundary",
+        "ConnectionTo": "left",
+        "ConnectionToId": "12"
+      }
+    ]
+  }
+]

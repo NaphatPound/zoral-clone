@@ -1,0 +1,620 @@
+@startuml
+
+' http://plantuml.com/PlantUML_Language_Reference_Guide.pdf
+
+title INT_CPL_inquiry_assessment 
+'''''''''''''''''''''''''''''''''''''''''''''''''
+' define diagram participants
+'''''''''''''''''''''''''''''''''''''''''''''''''
+
+actor Requestor
+box  "zoral" #E1FAFD
+boundary zoral #80BBEC
+end box
+
+box  "Master DB" #A6DEEE
+  database "mas_product_matrix" as mas_product_matrix #67C7E2
+  database "vw_lov_occupation_agricultural" as vw_lov_occupation_agricultural #80BBEC
+  database "vw_lov_occupation_non_agricultural" as vw_lov_occupation_non_agricultural #80BBEC
+  database "backend_parameter" as backend_parameter #67C7E2
+end box
+
+box "LPS Corporate Loan DB" #A6DEEE
+    database "mas_corp_assessment_mapping" as mas_corp_assessment_mapping #67C7E2
+    database "mas_corp_assessment_form" as mas_corp_assessment_form #67C7E2
+    database "mas_corp_assessment_topic" as mas_corp_assessment_topic #67C7E2
+    database "mas_corp_assessment_summary_topic" as mas_corp_assessment_summary_topic #67C7E2
+    database "mas_corp_assessment_summary_section" as mas_corp_assessment_summary_section #67C7E2
+    database "mas_corp_assessment_summary" as mas_corp_assessment_summary #67C7E2
+    database "mas_corp_assessment_section_calculate" as mas_corp_assessment_section_calculate #67C7E2
+    database "mas_corp_assessment_section" as mas_corp_assessment_section #67C7E2
+    database "mas_corp_assessment_option" as mas_corp_assessment_option #67C7E2
+    database "mas_corp_assessment_csr_formula" as mas_corp_assessment_csr_formula #67C7E2
+    database "mas_corp_assessment_crr_factor" as mas_corp_assessment_crr_factor #67C7E2
+    database "mas_corp_assessment_csr_factor" as mas_corp_assessment_csr_factor #67C7E2
+    database "mas_corp_assessment_variable" as mas_corp_assessment_variable #67C7E2
+    database "mas_corp_assessment_crr_criteria" as mas_corp_assessment_crr_criteria #67C7E2
+    database "mas_corp_assessment_csr_criteria" as mas_corp_assessment_csr_criteria #67C7E2
+end box
+
+'''''''''''''''''''''''''''''''''''''''''''''''''
+' formatting options
+'''''''''''''''''''''''''''''''''''''''''''''''''
+hide footbox
+
+'autonumber
+
+skinparam defaultFontName Comic Sans MS
+skinparam sequence {
+ParticipantBorderColor black
+ParticipantBackgroundColor #A9DCDF
+ParticipantFontName Comic Sans MS
+ParticipantFontSize 15
+ActorBackgroundColor #A9DCDF
+ActorBorderColor black
+ArrowFontName Comic Sans MS
+}
+
+'''''''''''''''''''''''''''''''''''''''''''''''''
+' describe sequence of events
+'''''''''''''''''''''''''''''''''''''''''''''''''
+
+Requestor -> zoral : INT_CPL_inquiry_assessment 
+
+== Validate Input Params ==
+
+  zoral -> zoral : Validation input param
+  alt If Validation Error
+  note right of zoral
+      Hard stop and return status.code  2000
+  end note
+  end
+
+
+== Query Mapping ==
+
+  group Query Assessment data
+    zoral -> mas_corp_assessment_mapping : Inquiry data from DB
+
+    activate mas_corp_assessment_mapping
+      note right of mas_corp_assessment_mapping
+        **WHERE** customer_type = <color blue>**"$customerType"**</color>
+      end note
+
+    mas_corp_assessment_mapping --> zoral : get mapping response
+
+    deactivate mas_corp_assessment_mapping
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  group #yellow filter mapping
+    loop mapping list
+        zoral -> zoral : condition assessmentType in <color blue>**$assessmentType**</color>
+    end
+        alt if mapping length != 0
+            alt if "CREATE_LOAN","CHANGE_LOAN","OVERDRAFT" in assessmentType
+            group Query Assessment data
+    zoral -> mas_product_matrix : Inquiry data from DB
+    activate mas_product_matrix
+      note right of mas_product_matrix
+        **WHERE** product_concat = <color blue>**"$productConcat"**</color>
+
+        **WHERE** product_concat = <color blue>**"$productConcat"**</color>
+        AND calculation_tool = <color blue>**"true"**</color>
+
+        **WHERE** product_concat = <color blue>**"$productConcat"**</color>
+        AND calculation_tool not like <color blue>**"%CAP%"**</color>
+      end note
+      note right of mas_product_matrix
+        result : {
+        crr_flag
+        csr_flag
+        }
+        listsNullType : {
+        product_concat
+        customer_type
+        }
+        listsOtherType : {
+        product_concat
+        customer_type
+        }
+      end note
+    mas_product_matrix --> zoral : get matrix response
+
+    deactivate mas_product_matrix
+   group #yellow filter product matrix
+    alt if productMatrix == 0 and productMaxtrix[0].crr_flag == 'N' and productMaxtrix[0].csr_flag == 'N'
+        note right of zoral
+          hard stop and return HTTP status 400
+        end note
+    end alt
+    loop filter mapping list
+        alt #turquoise productMaxtrix[0].crr_flag == 'Y' and productMaxtrix[0].csr_flag == 'Y'
+        note right of zoral
+            (crr_weight != null and csr_weight != null) or
+            (crr_weight == null and csr_weight != null) or
+            (crr_weight != null and csr_weight == null)
+        end note    
+        else productMaxtrix[0].crr_flag == 'Y' and productMaxtrix[0].csr_flag == 'N'
+        note right of zoral
+            crr_weight != null and csr_weight == null
+        end note    
+        else productMaxtrix[0].crr_flag == 'N' and productMaxtrix[0].csr_flag == 'Y'
+        note right of zoral
+            crr_weight == null and csr_weight != null
+        end note
+        else otherwise
+        note right of zoral
+            false
+        end note
+        end alt
+    end
+    zoral -> zoral : keep response to globalVariables mapping
+  end group
+
+
+end group
+        else mapping length > 1
+        zoral -> vw_lov_occupation_agricultural : Inquiry data from DB 
+        activate vw_lov_occupation_agricultural
+        zoral -> vw_lov_occupation_non_agricultural : Inquiry data from DB
+        activate vw_lov_occupation_non_agricultural
+          note right of vw_lov_occupation_agricultural
+            **WHERE** ddl_key = <color blue>**"$isicCode"**</color>
+          end note
+          note right of vw_lov_occupation_non_agricultural
+            **WHERE** ddl_key = <color blue>**"$isicCode"**</color>
+          end note
+        vw_lov_occupation_agricultural --> zoral : get occupation_agricultural response
+        deactivate vw_lov_occupation_agricultural
+        vw_lov_occupation_non_agricultural --> zoral : get occupation_non_agricultural response
+        deactivate vw_lov_occupation_non_agricultural
+        zoral -> backend_parameter : Inquiry data from DB 
+        activate backend_parameter
+        note right of backend_parameter
+            **WHERE** key_group = <color blue>**"CRR_CSR"**</color>
+            **AND** key_name in [<color blue>**"CRR_CSR_HIDE_SECTION"**</color>]
+        end note
+        backend_parameter --> zoral : get master_backend_parameter response
+        deactivate backend_parameter
+        group filter mapping
+        note right of zoral
+           defaultNonAgri = !(occupation_agricultural.length > 0) and !(occupation_non_agricultural.length > 0)
+          
+           1. filter customerStatus and total_debt
+           2. using response by step one filter by purpose . ex
+              accountType
+              accountGroup
+              AgriCultural
+              NonAgriCultural
+              AllCondition
+              DefaultNonAgriCultural
+           3. return response
+           common filter
+           AccountGroup.length > 0
+            |
+            v   
+           AccountType.length > 0 
+            |
+            v
+           AgriCultural.length > 0
+            |
+            v   
+           NonAgriCultural.length > 0 
+            |
+            v   
+           AllCondition.length > 0 
+            |
+            v
+           DefaultNonAgricultural.length > 0
+
+        special case
+          customerCode in ('603','600')
+          if ['CREATE_LOAN','CHANGE_LOAN','OVERDRAFT'] and check backend parameter
+           AccountGroup -> AccountType -> AgriCultural -> NonAgriCultural -> DefaultNonAgricultural
+          else if ['CREATE_DBM','CHANGE_DBM','AUTO_DBM'] and accountType in ['8200','8500']
+           AgriCultural -> NonAgriCultural -> AllCondition -> DefaultNonAgricultural
+          else AllCondition
+        end note
+        
+        end group
+        zoral -> zoral : keep response to globalVariables mapping
+            end alt      
+        else mapping length == 1
+        zoral -> zoral : keep response to globalVariables mapping
+        else if mapping length == 0
+        note right of zoral
+          hard stop and return HTTP status 400
+        end note
+        end alt
+  end group
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+  == Query From data ==
+
+  group Query Form data
+    zoral -> mas_corp_assessment_form : Inquiry data from DB
+
+    activate mas_corp_assessment_form
+      note right of mas_corp_assessment_form
+        **WHERE** form_group = <color blue>**"$form_group"**</color>
+      end note
+
+    mas_corp_assessment_form --> zoral : Answer response
+
+    deactivate mas_corp_assessment_form
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+  end group
+
+
+
+  == Filter From ==
+
+  group Check result.from.length
+      zoral -> zoral : Check from length
+      loop filter by property in form
+       alt if businessType
+       note right of zoral
+         keep form_code
+        end note
+       else customerCode
+       note right of zoral
+         keep form_code
+        end note
+       else groupType and accountType
+       note right of zoral
+         keep form_code
+        end note
+       else groupType and !(property.accountType) and $accountType != 8100
+       note right of zoral
+         keep form_code
+        end note
+       else isMultiForm 
+        note right of zoral
+         globalVariable isMultiForm = true
+        end note
+       end alt
+      zoral -> zoral : keep globalvariable selectForm form filter
+      end 
+  end group
+
+  == Query Other table ==
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Topic data
+    zoral -> mas_corp_assessment_topic : Inquiry data from DB
+
+    activate mas_corp_assessment_topic
+      note right of mas_corp_assessment_topic
+        **WHERE** form_code in <color blue>**"$form_code"**</color>
+        **AND** section_code in <color blue>**"$section_code"**</color>
+      end note
+
+    mas_corp_assessment_topic --> zoral : Answer response
+
+    deactivate mas_corp_assessment_topic
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Summary Topic data
+    zoral -> mas_corp_assessment_summary_topic : Inquiry data from DB
+
+    activate mas_corp_assessment_summary_topic
+      note right of mas_corp_assessment_summary_topic
+        **WHERE** summary_section_code in <color blue>**"$summary_section_code"**</color>
+      end note
+
+    mas_corp_assessment_summary_topic --> zoral : Answer response
+
+    deactivate mas_corp_assessment_summary_topic
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Summary Section data
+    zoral -> mas_corp_assessment_summary_section : Inquiry data from DB
+
+    activate mas_corp_assessment_summary_section
+      note right of mas_corp_assessment_summary_section
+        **WHERE** summary_code in <color blue>**"$summary_code"**</color>
+      end note
+
+    mas_corp_assessment_summary_section --> zoral : Answer response
+
+    deactivate mas_corp_assessment_summary_section
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Summary data
+    zoral -> mas_corp_assessment_summary : Inquiry data from DB
+
+    activate mas_corp_assessment_summary
+      note right of mas_corp_assessment_summary
+        **WHERE** summary_code in <color blue>**"$summary_code"**</color>
+      end note
+
+    mas_corp_assessment_summary --> zoral : Answer response
+
+    deactivate mas_corp_assessment_summary
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Section Calculate data
+    zoral -> mas_corp_assessment_section_calculate : Inquiry data from DB
+
+    activate mas_corp_assessment_section_calculate
+      note right of mas_corp_assessment_section_calculate
+        **WHERE** section_code in <color blue>**"$section_code"**</color>
+        **AND** form_code = <color blue>**"$form_code"**</color>
+      end note
+
+    mas_corp_assessment_section_calculate --> zoral : Answer response
+
+    deactivate mas_corp_assessment_section_calculate
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Section data
+    zoral -> mas_corp_assessment_section : Inquiry data from DB
+
+    activate mas_corp_assessment_section
+      note right of mas_corp_assessment_section
+        **WHERE** form_group = <color blue>**"$form_group"**</color>
+        **AND** form_code in <color blue>**"$form_code"**</color>
+      end note
+
+    mas_corp_assessment_section --> zoral : Answer response
+
+    deactivate mas_corp_assessment_section
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Option data
+    zoral -> mas_corp_assessment_option : Inquiry data from DB
+
+    activate mas_corp_assessment_option
+      note right of mas_corp_assessment_option
+        **WHERE** form_code in <color blue>**"$form_code"**</color>
+        **AND** topic_code in <color blue>**"$topic_code"**</color>
+      end note
+
+    mas_corp_assessment_option --> zoral : Answer response
+
+    deactivate mas_corp_assessment_option
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query CSR Formula data
+    zoral -> mas_corp_assessment_csr_formula : Inquiry data from DB
+
+    activate mas_corp_assessment_csr_formula
+      note right of mas_corp_assessment_csr_formula
+        **WHERE** formula_code = <color blue>**"$formula_code"**</color>
+      end note
+
+    mas_corp_assessment_csr_formula --> zoral : Answer response
+
+    deactivate mas_corp_assessment_csr_formula
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query CRR factor data
+    zoral -> mas_corp_assessment_crr_factor : Inquiry data from DB
+
+    activate mas_corp_assessment_crr_factor
+      note right of mas_corp_assessment_crr_factor
+        **WHERE** factor_code in <color blue>**"$factor_code"**</color>
+      end note
+
+    mas_corp_assessment_crr_factor --> zoral : Answer response
+
+    deactivate mas_corp_assessment_crr_factor
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query CSR Factor data
+    zoral -> mas_corp_assessment_csr_factor : Inquiry data from DB
+
+    activate mas_corp_assessment_csr_factor
+      note right of mas_corp_assessment_csr_factor
+        **WHERE** formula_code = <color blue>**"$formula_code"**</color>
+      end note
+
+    mas_corp_assessment_csr_factor --> zoral : Answer response
+
+    deactivate mas_corp_assessment_csr_factor
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query Variable data
+    zoral -> mas_corp_assessment_variable : Inquiry data from DB
+
+    activate mas_corp_assessment_variable
+      note right of mas_corp_assessment_variable
+        **WHERE** variable_code in <color blue>**"$variable_code"**</color>
+      end note
+
+    mas_corp_assessment_variable --> zoral : Answer response
+
+    deactivate mas_corp_assessment_variable
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query CRR criteria data
+    zoral -> mas_corp_assessment_crr_criteria : Inquiry data from DB
+
+    activate mas_corp_assessment_crr_criteria
+      note right of mas_corp_assessment_crr_criteria
+        **WHERE** group_criteria_code in <color blue>**"$group_criteria_code"**</color>
+      end note
+
+    mas_corp_assessment_crr_criteria --> zoral : Answer response
+
+    deactivate mas_corp_assessment_crr_criteria
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+   ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  group Query CSR criteria data
+    zoral -> mas_corp_assessment_csr_criteria : Inquiry data from DB
+
+    activate mas_corp_assessment_csr_criteria
+      note right of mas_corp_assessment_csr_criteria
+        **WHERE** formula_code = <color blue>**"$formula_code"**</color>
+      end note
+
+    mas_corp_assessment_csr_criteria --> zoral : Answer response
+
+    deactivate mas_corp_assessment_csr_criteria
+ 
+    alt if any database error
+      note right of zoral
+        hard stop and return HTTP status 200, status.code = 9100
+      end note
+    end alt
+
+  end group
+
+  ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+  == Mapping all query config data before return ==
+
+  group Mapping output data
+    zoral -> zoral : Mapping output data
+
+    activate zoral
+      note right of zoral
+        Mapping response of all query config data to output
+        return
+        {
+        "formSelect": "",
+        "isMultiForm": true,
+        "option": [],
+        "optionSectionScore": [],
+        "topic": [],
+        "section": [],
+        "form": [],
+        "mapping": {},
+        "summary": [],
+        "summarySection": [],
+        "summaryTopic": [],
+        "criteriaCRR": [],
+        "criteriaCSR": [],
+        "sectionCalculate": [],
+        "factorCRR": [],
+        "factorCSR": [],
+        "formulaCSR": [],
+        "variable": []
+      }
+      end note
+    deactivate zoral
+    
+  end group
+
+zoral--> Requestor: return response
+@enduml

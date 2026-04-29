@@ -1,0 +1,731 @@
+@startuml INT_CPL_inquiry_assessment
+
+' ------------------------------------------------------------------
+' Authored per SKILL.md (zoral-xml-to-plantuml)
+' Source : INT_CPL_inquiry_assessment_0.xml + .xml.layout
+' Content derived from the XML workflow definition only.
+'
+' Items inventory (from <Items> in XML) :
+'   #1  MessageStartEvent  "StartEvent"                    -> 3
+'   #2  EndEvent            "End"
+'   #3  ComponentTask       "AdwQueryMapping"              -> 18  err->12
+'   #4  ComponentTask       "AdwQueryFormAndSummary"       ->  7  err->12
+'   #5  ScriptTask          "Output"                       ->  2
+'   #6  ComponentTask       "AdwQueryOptionAndSummaryCriteria" -> 13 err->12
+'   #7  Gateway (Exclusive) "conditionCheckForm"           form.length>1 -> 8 | else 10
+'   #8  ScriptTask          "mapConditionUsingForm"        -> 10
+'   #9  ComponentTask       "AdwQueryTopicAndSummaryTopic" ->  6  err->12
+'   #10 ComponentTask       "AdwQuerySectionAndSummarySection" -> 9 err->12
+'   #11 SubDecisionTask     "LookupStatus" (SubWorkflow StatusCodeDecision) -> 5
+'   #12 ScriptTask          "StatusCode2000"               -> 11
+'   #13 ComponentTask       "AdwQueryVariable"             -> 11  err->12
+'   #14 Gateway (Exclusive) "conditionCheckMapping"        mapping.length>1 -> 16 | else 17
+'   #15 ScriptTask          "mapConditionUsingMapping"     ->  4  err->12
+'   #16 ComponentTask       "AdwQueryAgricultural"         -> 22  err->12
+'   #17 Gateway (Exclusive) "checkExistingDataGateway"     data==null -> 4 | else 11
+'   #18 ScriptTask          "setMappingFilters"            -> 20
+'   #19 ComponentTask       "AdwQueryProductMaxtrix"       -> 21
+'   #20 Gateway (Exclusive) "Copy_checkExistingDataGateway" loan-family -> 19 | else 14
+'   #21 ScriptTask          "mapConditionCRRandCSR"        -> 14
+'   #22 ComponentTask       "backend_parameter_CRR_CSR"    -> 15
+'
+' Layout-driven order (from .xml.layout ElementId Horizontal/Vertical) :
+'   1 -> 3 -> 18 -> 20 -> {19 -> 21} -> 14
+'     -> {16 -> 22 -> 15} | {17}
+'     -> 4 -> 7 -> {8} -> 10 -> 9 -> 6 -> 13
+'     -> 11 -> 5 -> 2
+'   Error : {3,4,6,9,10,13,15,16} -> 12 -> 11 -> 5 -> 2
+' ------------------------------------------------------------------
+
+title INT_CPL_inquiry_assessment
+
+actor Requestor
+
+box "Zoral" #E1FAFD
+  boundary "zoral" as zoral #80BBEC
+end box
+
+box "Master" #A6DEEE
+  database "master_mas_product_matrix"            as master_mas_product_matrix #67C7E2
+  database "master_mas_agricultural_p"            as master_mas_agricultural_p #67C7E2
+  database "master_backend_parameter"             as master_backend_parameter  #67C7E2
+end box
+
+box "Corporate Loan" #A6DEEE
+  database "mas_corp_assessment_mapping"           as mas_corp_assessment_mapping           #67C7E2
+  database "mas_corp_assessment_form"              as mas_corp_assessment_form              #67C7E2
+  database "mas_corp_assessment_summary"           as mas_corp_assessment_summary           #67C7E2
+  database "mas_corp_assessment_csr_formula"       as mas_corp_assessment_csr_formula       #67C7E2
+  database "mas_corp_assessment_section"           as mas_corp_assessment_section           #67C7E2
+  database "mas_corp_assessment_summary_section"   as mas_corp_assessment_summary_section   #67C7E2
+  database "mas_corp_assessment_topic"             as mas_corp_assessment_topic             #67C7E2
+  database "mas_corp_assessment_summary_topic"     as mas_corp_assessment_summary_topic     #67C7E2
+  database "mas_corp_assessment_section_calculate" as mas_corp_assessment_section_calculate #67C7E2
+  database "mas_corp_assessment_option"            as mas_corp_assessment_option            #67C7E2
+  database "mas_corp_assessment_crr_criteria"      as mas_corp_assessment_crr_criteria      #67C7E2
+  database "mas_corp_assessment_crr_factor"        as mas_corp_assessment_crr_factor        #67C7E2
+  database "mas_corp_assessment_csr_factor"        as mas_corp_assessment_csr_factor        #67C7E2
+  database "mas_corp_assessment_csr_criteria"      as mas_corp_assessment_csr_criteria      #67C7E2
+  database "mas_corp_assessment_variable"          as mas_corp_assessment_variable          #67C7E2
+end box
+
+box "SubDecision" #A6DEEE
+  boundary "StatusCodeDecision" as StatusCodeDecision #80BBEC
+end box
+
+hide footbox
+autonumber "<b>[00]"
+
+skinparam sequence {
+  ParticipantBorderColor      black
+  ParticipantBackgroundColor  #A9DCDF
+  ParticipantFontSize         14
+  ActorBackgroundColor        #A9DCDF
+  ActorBorderColor            black
+  LifeLineBorderColor         #2874A6
+  GroupBackgroundColor        #FBFDFF
+  GroupBorderColor            #2874A6
+}
+
+' ==================================================================
+' #1 MessageStartEvent
+' ==================================================================
+Requestor -> zoral : **INT_CPL_inquiry_assessment** (MessageStartEvent #1)
+
+note over zoral
+  **Input** (EmbeddedRuntime.Dependencies[input]) :
+    customerCode, accountType, accountGroup, accountSubType,
+    marketCode, projectCode, isicCode, customerStatus,
+    bussinessType, groupType, loanAmount, assessmentType, isInCBS
+
+  **GlobalVariables initial** :
+    statusCode    = 1000
+    isMultiForm   = false
+    selectForm    = ""
+    selectMapping = ""
+    isExist       = false
+    mapping       = []
+    variableCRR   = []
+end note
+
+' ==================================================================
+' #3 ComponentTask AdwQueryMapping
+' ==================================================================
+== (#3) AdwQueryMapping ==
+group #D4EEFB ComponentTask AdwQueryMapping
+  zoral -> mas_corp_assessment_mapping : query mapping
+  activate mas_corp_assessment_mapping
+    note right of mas_corp_assessment_mapping
+      **Input** : customerType = input.customerCode
+      **WHERE** customer_type = <color blue>**$customerType**</color>
+      **Select** : mapping_id, customer_status, customer_type,
+        account_group, account_type, form_group, formula_code,
+        isic_group, level_type, crr_weight, csr_weight,
+        occupation_agricultural, prefix_debt, total_debt,
+        summary_crr_code, summary_csr_code,
+        assessment_type, analysis_type, document_code
+      **Output** : mapping[]
+    end note
+  mas_corp_assessment_mapping --> zoral : mapping[]
+  deactivate mas_corp_assessment_mapping
+end
+note right of zoral #AED6F1
+  BoundaryErrorEvent **AdwQueryMappingError** -> #12
+end note
+
+' ==================================================================
+' #18 ScriptTask setMappingFilters
+' ==================================================================
+== (#18) setMappingFilters ==
+group #D4EEFB ScriptTask setMappingFilters
+  zoral -> zoral : filter mapping by input.assessmentType
+  note right of zoral
+    **Filter** :
+      globalVariables.mapping =
+        steps.AdwQueryMapping.data.mapping.filter(
+          m => m.assessment_type.includes(input.assessmentType)
+        )
+
+    **Global update** : globalVariables.mapping
+  end note
+end
+
+' ==================================================================
+' #20 Gateway Copy_checkExistingDataGateway
+' ==================================================================
+== (#20) Gateway Copy_checkExistingDataGateway ==
+alt #D4EEFB input.assessmentType IN ["CREATE_LOAN","CHANGE_LOAN","OVERDRAFT"]
+
+  ' ----------------------------------------------------------------
+  ' #19 ComponentTask AdwQueryProductMaxtrix
+  ' ----------------------------------------------------------------
+  == (#19) AdwQueryProductMaxtrix ==
+  group #D4EEFB ComponentTask AdwQueryProductMaxtrix
+    zoral -> master_mas_product_matrix : query product matrix (3 variants)
+    activate master_mas_product_matrix
+      note right of master_mas_product_matrix
+        **Input** productConcat =
+          accountGroup + "_" + accountType + "_" +
+          accountSubType + "_" + marketCode + "_" + projectCode
+
+        **Variant result**         :
+          WHERE product_concat = $productConcat
+          -> { crr_flag, csr_flag }
+
+        **Variant listsNullType**  :
+          WHERE product_concat = $productConcat
+            AND calculation_tool IS NULL
+          -> { product_concat, customer_type }
+
+        **Variant listsOtherType** :
+          WHERE product_concat = $productConcat
+            AND calculation_tool NOT LIKE '%CAP%'
+          -> { product_concat, customer_type }
+
+        **Output** : { result[], listsNullType[], listsOtherType[] }
+      end note
+    master_mas_product_matrix --> zoral : product matrix data
+    deactivate master_mas_product_matrix
+  end
+
+  ' ----------------------------------------------------------------
+  ' #21 ScriptTask mapConditionCRRandCSR
+  ' ----------------------------------------------------------------
+  == (#21) mapConditionCRRandCSR ==
+  group #D4EEFB ScriptTask mapConditionCRRandCSR
+    alt productMatrix empty OR (crr_flag='N' AND csr_flag='N')
+      zoral -> zoral : throw Error('not found')
+      note right of zoral #AED6F1
+        hard-stop (no product configuration)
+      end note
+    else productMatrix has rows
+      zoral -> zoral : re-filter globalVariables.mapping per flag combo
+      note right of zoral
+        **Flag combo rules** :
+          Y/Y : keep rows matching
+                 (crr_weight!=null & csr_weight!=null) OR
+                 (crr_weight==null & csr_weight!=null) OR
+                 (crr_weight!=null & csr_weight==null)
+          Y/N : crr_weight!=null AND csr_weight==null
+          N/Y : crr_weight==null AND csr_weight!=null
+          other : drop
+
+        **Global update** : globalVariables.mapping (narrowed)
+      end note
+    end
+  end
+
+else #D6EAF8 else (not loan-family)
+  zoral -> zoral : skip product matrix; proceed to #14
+end
+
+' ==================================================================
+' #14 Gateway conditionCheckMapping
+' ==================================================================
+== (#14) Gateway conditionCheckMapping ==
+alt #D4EEFB globalVariables.mapping.length > 1
+
+  ' ----------------------------------------------------------------
+  ' #16 ComponentTask AdwQueryAgricultural
+  ' ----------------------------------------------------------------
+  == (#16) AdwQueryAgricultural ==
+  group #D4EEFB ComponentTask AdwQueryAgricultural
+    zoral -> master_mas_agricultural_p : query agricultural by 5-level isic
+    activate master_mas_agricultural_p
+      note right of master_mas_agricultural_p
+        **Input** : isic = input.isicCode.split("|")
+          removeLeadingZeros each level ->
+           isicsd, isicgc, isicts, isicsm, isicss
+
+        **WHERE** isicgc = $isicgc AND isicsd = $isicsd
+              AND isicsm = $isicsm AND isicss = $isicss
+              AND isicts = $isicts
+
+        **Select** : formula_type, formula_name, occupation_agricultural
+      end note
+    master_mas_agricultural_p --> zoral : master_mas_agricultural_p[]
+    deactivate master_mas_agricultural_p
+  end
+  note right of zoral #AED6F1
+    BoundaryErrorEvent **AdwQueryAgriculturalError** -> #12
+  end note
+
+  ' ----------------------------------------------------------------
+  ' #22 ComponentTask backend_parameter_CRR_CSR
+  ' ----------------------------------------------------------------
+  == (#22) backend_parameter_CRR_CSR ==
+  group #D4EEFB ComponentTask backend_parameter_CRR_CSR
+    zoral -> master_backend_parameter : query backend parameter
+    activate master_backend_parameter
+      note right of master_backend_parameter
+        **Input** :
+          keyGroup = "CRR_CSR"
+          keyName  = ["CRR_CSR_HIDE_SECTION"]
+
+        **WHERE** key_group = $keyGroup
+              AND key_name IN $keyName
+
+        **Select** : create_by, create_date, key_group, key_id,
+         key_name, key_value, key_json_value, remark,
+         update_by, update_date
+      end note
+    master_backend_parameter --> zoral : result[]
+    deactivate master_backend_parameter
+  end
+
+  ' ----------------------------------------------------------------
+  ' #15 ScriptTask mapConditionUsingMapping
+  ' ----------------------------------------------------------------
+  == (#15) mapConditionUsingMapping ==
+  group #D4EEFB ScriptTask mapConditionUsingMapping
+    zoral -> zoral : compute agri flags + pre-filter + bucket + prioritize
+    note right of zoral
+      **Derived flags** from master_mas_agricultural_p[0] :
+        agricultural           = occupation_agricultural === true
+        nonAgricultural        = occupation_agricultural !== true
+        defaultNonAgricultural = !agricultural && !nonAgricultural
+
+      **backend_parameter lookup** :
+        backendParamConfig = find by key_name='CRR_CSR_HIDE_SECTION'
+        arrayJsonBackendParamConfig = backendParamConfig.key_json_value
+
+      **perFilter** = mapping.filter(v =>
+        (v.customer_status == input.customerStatus || v.customer_status == null)
+         AND total_debt check using prefix_debt ('<=' or '>') vs input.loanAmount)
+
+      **6 buckets** (all from perFilter) :
+        filterByAccountType             : account_type == input.accountType
+        filterByAccountGroup            : account_group == "LN"
+                                           && == input.accountGroup
+        filterByAgriCultural            : account_group == "COM"
+                                           && occupation_agricultural==true
+                                           && isic_group includes formula_name
+                                           && agricultural
+        filterByNonAgriCultural         : account_group == "COM"
+                                           && occupation_agricultural==false
+                                           && nonAgricultural
+        filterByAllCondition            : account_group==null
+                                           && account_type==null
+                                           && occupation_agricultural==null
+        filterByDefaultNonAgricultural  : account_group == "COM"
+                                           && occupation_agricultural==false
+                                           && defaultNonAgricultural
+
+      **Priority** :
+        customerCode IN ('603','600') :
+          assessmentType IN ('CREATE_LOAN','CHANGE_LOAN','OVERDRAFT') :
+            checkConfigMatch by [accountType, accountSubType, marketCode]
+              match   -> AccountGroup > AccountType > AgriCultural
+                       > NonAgriCultural > DefaultNonAgricultural
+              no match -> AllCondition | throw 'not found'
+          assessmentType IN ('CREATE_DBM','CHANGE_DBM','AUTO_DBM') :
+            accountType IN ('8200','8500') :
+              AgriCultural > NonAgriCultural
+                           > AllCondition > DefaultNonAgricultural
+            else : AllCondition | throw 'not found'
+        other customerCode (default chain) :
+          AccountGroup > AccountType > AgriCultural
+           > NonAgriCultural > AllCondition > DefaultNonAgricultural
+          else : throw 'not found'
+
+      **Global update** : globalVariables.selectMapping = picked row
+    end note
+  end
+  note right of zoral #AED6F1
+    BoundaryErrorEvent **mapConditionUsingMappingError** -> #12
+  end note
+
+else #D6EAF8 else (mapping.length <= 1)
+
+  ' ----------------------------------------------------------------
+  ' #17 Gateway checkExistingDataGateway
+  ' ----------------------------------------------------------------
+  == (#17) Gateway checkExistingDataGateway ==
+  alt queryConditionResult.data == null
+    zoral -> zoral : continue to #4 (AdwQueryFormAndSummary)
+  else data present
+    zoral -> zoral : globalVariables.isExist = true; branch to #11
+  end
+
+end
+
+' ==================================================================
+' #4 ComponentTask AdwQueryFormAndSummary
+' ==================================================================
+== (#4) AdwQueryFormAndSummary ==
+group #D4EEFB ComponentTask AdwQueryFormAndSummary (3 tables in one call)
+  note over zoral
+    queryConditionResult =
+      globalVariables.selectMapping ?? globalVariables.mapping[0]
+    Inputs :
+      form_group   = queryConditionResult.form_group
+      summary_code = [summary_crr_code ?? '', summary_csr_code ?? '']
+      formula_code = queryConditionResult.formula_code ?? ''
+  end note
+
+  zoral -> mas_corp_assessment_form : query form
+  activate mas_corp_assessment_form
+    note right of mas_corp_assessment_form
+      **WHERE** form_group = <color blue>**$form_group**</color>
+      **Select** : form_code, form_desc, form_group, form_group_desc,
+       form_id, form_title, is_form_base, pass_score, score, property
+    end note
+  mas_corp_assessment_form --> zoral : form[]
+  deactivate mas_corp_assessment_form
+
+  zoral -> mas_corp_assessment_summary : query summary
+  activate mas_corp_assessment_summary
+    note right of mas_corp_assessment_summary
+      **WHERE** summary_code IN <color blue>**$summary_code**</color>
+      **Select** : summary_code, summary_desc, summary_id, property
+    end note
+  mas_corp_assessment_summary --> zoral : summary[]
+  deactivate mas_corp_assessment_summary
+
+  zoral -> mas_corp_assessment_csr_formula : query CSR formula
+  activate mas_corp_assessment_csr_formula
+    note right of mas_corp_assessment_csr_formula
+      **WHERE** formula_code = <color blue>**$formula_code**</color>
+      **Select** : description, formula_code, formula_id,
+       pass_score, score, property
+    end note
+  mas_corp_assessment_csr_formula --> zoral : formulaCSR[]
+  deactivate mas_corp_assessment_csr_formula
+end
+note right of zoral #AED6F1
+  BoundaryErrorEvent **AdwQueryFormAndSummaryError** -> #12
+end note
+
+' ==================================================================
+' #7 Gateway conditionCheckForm
+' ==================================================================
+== (#7) Gateway conditionCheckForm ==
+alt #D4EEFB steps.AdwQueryFormAndSummary.data.form.length > 1
+
+  == (#8) mapConditionUsingForm ==
+  group #D4EEFB ScriptTask mapConditionUsingForm
+    zoral -> zoral : pick form_code via form.property
+    note right of zoral
+      iterate form[] :
+        property.businessType  includes input.bussinessType  -> filter=form_code
+        property.customerCode  includes input.customerCode   -> filter=form_code
+        property.groupType     includes input.groupType
+         AND property.accountType includes input.accountType -> filter=form_code
+        property.groupType     includes input.groupType
+         AND no property.accountType
+         AND input.accountType != '8100'                      -> filter=form_code
+        property.isMultiForm
+         -> globalVariables.isMultiForm = true
+
+      **Global update** : globalVariables.selectForm = filter
+    end note
+  end
+
+else #D6EAF8 else (single form)
+  zoral -> zoral : skip form routing
+end
+
+' ==================================================================
+' #10 ComponentTask AdwQuerySectionAndSummarySection
+' ==================================================================
+== (#10) AdwQuerySectionAndSummarySection ==
+group #D4EEFB ComponentTask AdwQuerySectionAndSummarySection (2 tables)
+  note over zoral
+    FormList = distinct form_code from queryFormResult
+    if globalVariables.selectForm :
+      FormList = forms where is_form_base || form_code == selectForm
+  end note
+
+  zoral -> mas_corp_assessment_section : query section
+  activate mas_corp_assessment_section
+    note right of mas_corp_assessment_section
+      **WHERE** form_group = $form_group AND form_code IN $form_code
+      order_by section_seq asc
+      **Select** : form_code, form_group, section_code, section_desc,
+       section_id, section_seq, section_type, property
+    end note
+  mas_corp_assessment_section --> zoral : section[]
+  deactivate mas_corp_assessment_section
+
+  zoral -> mas_corp_assessment_summary_section : query summary_section
+  activate mas_corp_assessment_summary_section
+    note right of mas_corp_assessment_summary_section
+      **WHERE** summary_code IN $summary_code
+      order_by summary_section_id asc
+      **Select** : group_criteria_code, is_sum, is_show,
+       section_code, section_type, summary_code,
+       summary_section_code, summary_section_desc,
+       summary_section_id, condition, sections
+    end note
+  mas_corp_assessment_summary_section --> zoral : summarySection[]
+  deactivate mas_corp_assessment_summary_section
+end
+note right of zoral #AED6F1
+  BoundaryErrorEvent **AdwQuerySectionAndSummarySectionError** -> #12
+end note
+
+' ==================================================================
+' #9 ComponentTask AdwQueryTopicAndSummaryTopic
+' ==================================================================
+== (#9) AdwQueryTopicAndSummaryTopic ==
+group #D4EEFB ComponentTask AdwQueryTopicAndSummaryTopic (3 tables)
+  note over zoral
+    SectionList        = distinct section.section_code
+    SummarySectionList = distinct non-null summarySection.summary_section_code
+    FormList           = as above (filtered by selectForm+is_form_base)
+  end note
+
+  zoral -> mas_corp_assessment_topic : query topic
+  activate mas_corp_assessment_topic
+    note right of mas_corp_assessment_topic
+      **WHERE** form_code IN $form_code AND section_code IN $section_code
+      order_by topic_seq asc, section_code asc
+      **Select** : form_code, form_group, section_code, topic_code,
+       topic_desc, topic_group, topic_id, topic_input_type,
+       topic_seq, topic_type, uom_text, factor_code, hierarchy, property
+    end note
+  mas_corp_assessment_topic --> zoral : topic[]
+  deactivate mas_corp_assessment_topic
+
+  zoral -> mas_corp_assessment_summary_topic : query summary_topic
+  activate mas_corp_assessment_summary_topic
+    note right of mas_corp_assessment_summary_topic
+      **WHERE** summary_section_code IN $SummarySectionList
+      order_by summary_topic_seq asc
+      **Select** : summary_section_code, summary_topic_code,
+       summary_topic_desc, summary_topic_id,
+       summary_topic_input_type, summary_topic_type,
+       summary_topic_seq, topic_group, uom_text, name, property
+    end note
+  mas_corp_assessment_summary_topic --> zoral : summaryTopic[]
+  deactivate mas_corp_assessment_summary_topic
+
+  zoral -> mas_corp_assessment_section_calculate : query section_calculate
+  activate mas_corp_assessment_section_calculate
+    note right of mas_corp_assessment_section_calculate
+      **WHERE** section_code IN $section_code AND form_code IN $form_code
+      **Select** : section_calculate_code, section_calculate_id,
+       section_code, form_code, form_group, formula
+    end note
+  mas_corp_assessment_section_calculate --> zoral : sectionCalculate[]
+  deactivate mas_corp_assessment_section_calculate
+end
+note right of zoral #AED6F1
+  BoundaryErrorEvent **AdwQueryTopicAndSummaryTopicError** -> #12
+end note
+
+' ==================================================================
+' #6 ComponentTask AdwQueryOptionAndSummaryCriteria
+' ==================================================================
+== (#6) AdwQueryOptionAndSummaryCriteria ==
+group #D4EEFB ComponentTask AdwQueryOptionAndSummaryCriteria (5 tables)
+  note over zoral
+    **Input build** :
+      topic_code             = distinct topic.topic_code
+      form_code              = FormList (is_form_base OR selectForm)
+      group_criteria_code    = distinct summarySection.group_criteria_code
+      factor_code            = union(topic.factor_code,
+                                     FC_\\d+ tokens extracted
+                                     from sectionCalculate.formula)
+      section_calculate_code = distinct sectionCalculate.section_calculate_code
+      formula_code           = formulaCSR[0]?.formula_code ?? ''
+  end note
+
+  zoral -> mas_corp_assessment_option : query option (2 where variants)
+  activate mas_corp_assessment_option
+    note right of mas_corp_assessment_option
+      **option**           :
+        WHERE form_code IN $form_code
+          AND topic_code IN $topic_code
+        order_by option_seq asc
+
+      **optionSectionScore** :
+        WHERE form_code IN $form_code
+          AND section_calculate_code IN $section_calculate_code
+        order_by option_seq asc
+
+      **Select** : option_id, option_desc, option_input_type,
+       option_seq, option_group, score, min_range, max_range,
+       form_code, form_group, section_code, topic_code,
+       section_calculate_code, property
+    end note
+  mas_corp_assessment_option --> zoral : { option[], optionSectionScore[] }
+  deactivate mas_corp_assessment_option
+
+  zoral -> mas_corp_assessment_crr_criteria : query CRR criteria
+  activate mas_corp_assessment_crr_criteria
+    note right of mas_corp_assessment_crr_criteria
+      **WHERE** group_criteria_code IN $group_criteria_code
+      **Select** : criteria_code, criteria_id, group_criteria_code,
+       minimum_score, maximum_score, result_grade, isPass, condition
+    end note
+  mas_corp_assessment_crr_criteria --> zoral : criteriaCRR[]
+  deactivate mas_corp_assessment_crr_criteria
+
+  zoral -> mas_corp_assessment_crr_factor : query CRR factor
+  activate mas_corp_assessment_crr_factor
+    note right of mas_corp_assessment_crr_factor
+      **WHERE** factor_code IN $factor_code
+      **Select** : condition_code, factor_code, factor_id,
+       factor_name, formula, variable_code
+    end note
+  mas_corp_assessment_crr_factor --> zoral : factorCRR[]
+  deactivate mas_corp_assessment_crr_factor
+
+  zoral -> mas_corp_assessment_csr_factor : query CSR factor
+  activate mas_corp_assessment_csr_factor
+    note right of mas_corp_assessment_csr_factor
+      **WHERE** formula_code = $formula_code
+      **Select** : coefficient, condition_code, description,
+       factor_code, factor_id, factor_name, formula, formula_code,
+       max, min, property, variable, variable_code
+    end note
+  mas_corp_assessment_csr_factor --> zoral : factorCSR[]
+  deactivate mas_corp_assessment_csr_factor
+
+  zoral -> mas_corp_assessment_csr_criteria : query CSR criteria
+  activate mas_corp_assessment_csr_criteria
+    note right of mas_corp_assessment_csr_criteria
+      **WHERE** formula_code = $formula_code
+      **Select** : criteria_code, criteria_id, formula_code,
+       grade, grade_desc, interest_rate_spread, interest_rate_type,
+       isPass, maximum_pd, maximum_score, minimum_pd, minimum_score,
+       result_desc, prefix
+    end note
+  mas_corp_assessment_csr_criteria --> zoral : criteriaCSR[]
+  deactivate mas_corp_assessment_csr_criteria
+end
+note right of zoral #AED6F1
+  BoundaryErrorEvent **AdwQueryOptionAndSummaryCriteriaError** -> #12
+end note
+
+' ==================================================================
+' #13 ComponentTask AdwQueryVariable
+' ==================================================================
+== (#13) AdwQueryVariable ==
+group #D4EEFB ComponentTask AdwQueryVariable
+  note over zoral
+    **Aggregate** :
+      variableCRRList  = union of factorCRR[*].variable_code
+      variableCSRList  = union of factorCSR[*].variable_code
+      topicVariable    = topic[*].property.refVariable
+      variable_code    = distinct union of all three
+
+    **Global update** :
+      globalVariables.variableCRR = variableCRRList
+  end note
+
+  zoral -> mas_corp_assessment_variable : query variable
+  activate mas_corp_assessment_variable
+    note right of mas_corp_assessment_variable
+      **WHERE** variable_code IN $variable_code
+      **Select** : condition_code, property, variable_code,
+       variable_id, variable_name, integrate_code
+    end note
+  mas_corp_assessment_variable --> zoral : variable[]
+  deactivate mas_corp_assessment_variable
+end
+note right of zoral #AED6F1
+  BoundaryErrorEvent **AdwQueryVariableError** -> #12
+end note
+
+' ==================================================================
+' #11 SubDecisionTask LookupStatus
+' ==================================================================
+== (#11) SubDecisionTask LookupStatus ==
+group #D4EEFB call StatusCodeDecision SubWorkflow
+  zoral -> StatusCodeDecision : statusCode = globalVariables.statusCode
+  activate StatusCodeDecision
+    note right of StatusCodeDecision
+      **SubWorkflow** : StatusCodeDecision (SubWorkflows/SubWorkflow)
+      FailIfNotAccepted = false
+      ValidateInput     = true
+
+      **Return shape** :
+        RuntimeOutput,
+        Reasons[] : { Description, Code, Category, Delayed, Suppressed }
+        Result    : 1=Error, 2=Rejected, 3=Accepted
+        ResultName: "None" | "Error" | "Rejected" | "Accepted"
+    end note
+  StatusCodeDecision --> zoral : status lookup
+  deactivate StatusCodeDecision
+end
+
+' ==================================================================
+' #5 ScriptTask Output
+' ==================================================================
+== (#5) ScriptTask Output ==
+group #D4EEFB ScriptTask Output (assemble response)
+  zoral -> zoral : post-process + build final output
+  activate zoral
+    note right of zoral
+      **(1) selectForm merging** (if globalVariables.selectForm) :
+        baseFormCode = form where is_form_base == true
+        Union base-form rows with selected-form rows for
+          section, topic, option, optionSectionScore
+        Dedupe by composite keys
+         (topic_code, section_code, option_group, section_calculate_code)
+        Re-sort topic by topic_seq
+
+      **(2) CSR section-hide rule** :
+        If form.property.conditionRender.factorNameIncludeCSR present ->
+          keep only CRR sections + sections referenced
+           by matching factor/topic
+          cascade filter on topic/option
+          collect variablesOtherConditionList
+           from topic.property.refVariable
+        Else if form_group IN ('FG_1','FG_19') ->
+          drop section_type == 'CSR'
+          cascade filter topic/option
+
+      **(3) Variable list selection** by crr_weight / csr_weight :
+        (!=null, ==null) -> variableCRR only
+        (==null, !=null) -> variableCSR + variablesOtherConditionList
+        (!=null, !=null) -> union(variableCRR, variableCSR, others)
+
+      **(4) Topic condition override** :
+        for each topic, if property.condition :
+          replace property with entry whose
+           condition.customerType == input.customerCode
+
+      **(5) integrate_code filter** :
+        if input.isInCBS -> drop variables where integrate_code IN
+           [LOAN, LOAN_REQUEST_HEADER, CAP, CAP_INVESTMENT, CMS, CMS_JURISTIC]
+           AND variable_code IN globalVariables.variableCRR
+
+        if loan-family AND product matrix lists non-empty
+         AND form_group=='FG_1' AND crr_weight!=null ->
+          drop variables where integrate_code IN [FIN, CAP]
+           AND variable_code IN globalVariables.variableCRR
+
+      **(6) Return shape** :
+        {
+          status : steps.LookupStatus,
+          data : { formSelect, isMultiForm, mapping,
+                   form, summary, summarySection, summaryTopic,
+                   section, sectionCalculate,
+                   topic, option, optionSectionScore,
+                   criteriaCRR, criteriaCSR,
+                   factorCRR, factorCSR, formulaCSR, variable }
+        }
+    end note
+  deactivate zoral
+end
+
+' ==================================================================
+' Error path - #12 StatusCode2000
+' ==================================================================
+note over zoral #AED6F1
+  **Error / Status Pattern**
+    BoundaryErrorEvent on items {3, 4, 6, 9, 10, 13, 15, 16}
+    -> #12 ScriptTask **StatusCode2000**
+         (globalVariables.statusCode = 2000)
+    -> #11 SubDecisionTask LookupStatus
+    -> #5  ScriptTask Output
+    -> #2  EndEvent
+end note
+
+' ==================================================================
+zoral --> Requestor : **response** { status, data } (EndEvent #2)
+
+@enduml

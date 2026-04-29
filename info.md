@@ -1,0 +1,1 @@
+i want to create zoral low code https://zorallabs.com/ help me find info and design use nextjs react typescript use this folder for .xml format for ren der code garph node help me new design with json focus feature low code node graph first

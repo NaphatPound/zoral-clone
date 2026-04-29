@@ -1,0 +1,1461 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProcessWorkflowConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  IsLightweight="false"
+  Description=""
+  FormatVersion="4.3"
+  Revision="214"
+  RuntimeName="INT_CPL_inquiry_assessment_Embedded_1719382745147"
+  AllowBackNavigation="false"
+  DefaultSaveLastExecutionsCount="-1">
+  <Hierarchies />
+  <DataSources />
+  <GlobalVariables>
+    <add
+      name="statusCode"
+      value="1000"
+      isRevertible="false" />
+    <add
+      name="isMultiForm"
+      value="false"
+      isRevertible="false" />
+    <add
+      name="selectForm"
+      value=""
+      isRevertible="false" />
+    <add
+      name="selectMapping"
+      value=""
+      isRevertible="false" />
+    <add
+      name="isExist"
+      value="false"
+      isRevertible="false" />
+    <add
+      name="mapping"
+      value="[]"
+      isRevertible="false" />
+    <add
+      name="variableCRR"
+      value="[]"
+      isRevertible="false" />
+  </GlobalVariables>
+  <Items>
+    <MessageStartEvent
+      ItemId="1"
+      NextId="3"
+      EnableMetricsCollection="false"
+      Name="StartEvent">
+      <Dependencies />
+    </MessageStartEvent>
+    <EndEvent
+      ItemId="2"
+      EnableMetricsCollection="false"
+      Name="End">
+      <Dependencies />
+    </EndEvent>
+    <ComponentTask
+      ItemId="3"
+      NextId="18"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQueryMapping">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>result.variables = {
+    customerType: input.customerCode
+}
+
+result.query = `query MyQuery($customerType: String!) {
+    mapping:lps_corporate_loan_mas_corp_assessment_mapping(where: {customer_type: {_eq: $customerType}}) {
+    account_group
+    account_type
+    csr_weight
+    crr_weight
+    customer_status
+    form_group
+    formula_code
+    isic_group
+    occupation_agricultural
+    prefix_debt
+    summary_crr_code
+    summary_csr_code
+    total_debt
+    assessment_type
+  }
+}
+`;</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="AdwQueryMappingError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ComponentTask>
+    <ComponentTask
+      ItemId="4"
+      NextId="7"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQueryFormAndSummary">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>const queryConditionResult = globalVariables.selectMapping ?? globalVariables.mapping[0]
+
+result.variables = {
+  form_group: queryConditionResult.form_group,
+  summary_code: [queryConditionResult.summary_crr_code ?? '' , queryConditionResult.summary_csr_code ?? ''],
+  formula_code: queryConditionResult.formula_code ?? ''
+};
+
+result.query = `query MyQuery ($form_group:String!,$summary_code:[String],$formula_code:String) {
+  form:lps_corporate_loan_mas_corp_assessment_form(where: {form_group: {_eq: $form_group}}) {
+    form_code
+    form_group
+    is_form_base
+    property
+  }
+  summary:lps_corporate_loan_mas_corp_assessment_summary(where: {summary_code:{_in:$summary_code}}) {
+    summary_code
+  }
+  formulaCSR:lps_corporate_loan_mas_corp_assessment_csr_formula(where:{formula_code:{_eq:$formula_code}}){
+    formula_code
+    pass_score
+    score
+  }
+}`;</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+          <string>steps</string>
+          <string>globalVariables</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="AdwQueryFormAndSummaryError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ComponentTask>
+    <ScriptTask
+      ItemId="5"
+      NextId="2"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="Output">
+      <Dependencies>
+        <string>globalVariables</string>
+        <string>steps</string>
+        <string>output</string>
+        <string>input</string>
+      </Dependencies>
+      <ProcessItemDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <OutputSchema>{
+  "type": "object"
+}</OutputSchema>
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>let formList = steps.AdwQueryFormAndSummary.data.form
+let sectionList = steps.AdwQuerySectionAndSummarySection.data.section
+let summarySectionList = steps.AdwQuerySectionAndSummarySection.data.summarySection
+let summaryTopicList = steps.AdwQueryTopicAndSummaryTopic.data.summaryTopic
+let criteriaCRRList = steps.AdwQueryOptionAndSummaryCriteria.data.criteriaCRR
+let criteriaCSRList = steps.AdwQueryOptionAndSummaryCriteria.data.criteriaCSR
+let topicList = steps.AdwQueryTopicAndSummaryTopic.data.topic
+let optionList = steps.AdwQueryOptionAndSummaryCriteria.data.option
+let optionSectionScoreList = steps.AdwQueryOptionAndSummaryCriteria.data.optionSectionScore
+const querySectionCalculateResult = steps.AdwQueryTopicAndSummaryTopic.data.sectionCalculate
+let setTopicList = []
+const queryConditionResult = globalVariables.selectMapping ?? globalVariables.mapping[0]
+const isExist = globalVariables?.isExist
+const factorCSRList = steps.AdwQueryOptionAndSummaryCriteria.data.factorCSR
+const formSelect = globalVariables.selectForm ?? steps.AdwQueryFormAndSummary.data.form[0].form_code
+
+if (globalVariables.selectForm) {
+    const baseFormCode = formList.filter((value) =&gt; value.is_form_base)[0].form_code
+    const insectSectionList = sectionList.filter((value) =&gt; value.form_code == globalVariables.selectForm)
+    const insectTopicList = topicList.filter((value) =&gt; value.form_code == globalVariables.selectForm)
+    const insectOptionList = optionList.filter((value) =&gt; value.form_code == globalVariables.selectForm)
+    const insectOptionSectionScore = optionSectionScoreList.filter((value) =&gt; value.form_code == globalVariables.selectForm)
+    const setSectionList = [...new Set(insectSectionList.map((item) =&gt; item.section_code))]
+    setTopicList = [...new Set(insectTopicList.map((item) =&gt; ({topic_code: item.topic_code, section_code: item.section_code})))]
+    const setOptionList = [...new Set(insectOptionList.map((item) =&gt; ({topic_code: item.topic_code, section_code: item.section_code, option_group:item.option_group})))]
+    const setOptionSectionScoreList = [
+        ...new Set(insectOptionSectionScore.map((item) =&gt; ({section_calculate_code: item.section_calculate_code, section_code: item.section_code,option_group:item.option_group}))),
+    ]
+    const baseOptionList = optionList.filter(
+        (value) =&gt;
+            value.form_code == baseFormCode &amp;&amp;
+            !setOptionList.find((val) =&gt; value.topic_code == val.topic_code &amp;&amp; value.section_code == val.section_code &amp;&amp; value.option_group == val.option_group)
+    )
+    const baseTopicList = topicList.filter(
+        (value) =&gt;
+            value.form_code == baseFormCode &amp;&amp;
+            !setTopicList.find((val) =&gt; value.topic_code == val.topic_code &amp;&amp; value.section_code == val.section_code)
+    )
+    const baseSectionList = sectionList.filter((value) =&gt; value.form_code == baseFormCode &amp;&amp; !setSectionList.includes(value.section_code))
+    const baseOptionSectionScoreList = optionSectionScoreList.filter(
+        (value) =&gt;
+            value.form_code == baseFormCode &amp;&amp;
+            !setOptionSectionScoreList.find(
+                (val) =&gt; value.section_calculate_code == val.section_calculate_code &amp;&amp; value.section_code == val.section_code &amp;&amp; value.option_group == val.option_group
+            )
+    )
+
+    optionSectionScoreList = [...baseOptionSectionScoreList, ...insectOptionSectionScore]
+    optionList = [...baseOptionList, ...insectOptionList]
+    topicList = [...baseTopicList, ...insectTopicList].sort((valueA, valueB) =&gt; valueA.topic_seq - valueB.topic_seq)
+    sectionList = [...baseSectionList, ...insectSectionList]
+}
+
+// condition to hide a section CSR
+
+const listOfIncludeSectionCSR =
+    formList.find((value) =&gt; value.form_code == formSelect &amp;&amp; value.property?.conditionRender)?.property?.conditionRender?.factorNameIncludeCSR ?? []
+
+let variablesOtherConditionList = []
+
+if (listOfIncludeSectionCSR.length &gt; 0) {
+    const factorList = factorCSRList.map((value) =&gt; value.factor_name)
+    const listTopic = [
+        ...new Set(
+            listOfIncludeSectionCSR
+                .filter((value) =&gt; factorList.includes(value.name))
+                .map((value) =&gt; value.list)
+                .flat()
+        ),
+    ]
+    sectionList = sectionList.filter((value) =&gt; value.section_type == 'CRR' || listTopic.find((topic) =&gt; topic.section == value.section_code))
+    let sectionListTemp = sectionList.map((value) =&gt; ({sectionCode: value.section_code, sectionType: value.section_type}))
+    topicList = topicList.filter(
+        (value) =&gt;
+            sectionListTemp.find((vals)=&gt; vals.sectionType == 'CRR' &amp;&amp; value.section_code == vals.sectionCode) ||
+            listTopic.find((topic) =&gt; topic.topic == value.topic_code &amp;&amp; topic.section == value.section_code)
+    )
+    const topicTempList = topicList.map((value) =&gt; value.topic_code)
+    sectionListTemp = sectionList.map((value) =&gt; value.section_code)
+    optionList = optionList.filter((value) =&gt; topicTempList.includes(value.topic_code) &amp;&amp; sectionListTemp.includes(value.section_code))
+    
+    variablesOtherConditionList = topicList.filter((value)=&gt; value?.property?.refVariable).reduce((acc,value)=&gt; {
+    if(value?.property?.refVariable){
+        acc.push(value?.property?.refVariable)
+    }
+    return acc
+},[])
+    
+} else if(queryConditionResult.form_group == 'FG_1' || queryConditionResult.form_group == 'FG_19' ) {
+    sectionList = sectionList.filter((value) =&gt; value.section_type != 'CSR')
+    const sectionListTemp = sectionList.map((value) =&gt; value.section_code)
+    topicList = topicList.filter((value) =&gt; sectionListTemp.includes(value.section_code))
+    const topicTempList = topicList.map((value) =&gt; value.topic_code)
+    optionList = optionList.filter((value) =&gt; topicTempList.includes(value.topic_code) &amp;&amp; sectionListTemp.includes(value.section_code))
+}
+
+// filter varaible using
+let factorFormulaList = querySectionCalculateResult
+    .map((item) =&gt; item.formula)
+    .reduce((acc, value) =&gt; {
+        const factorList = value.match(/FC_(\d+)/g)
+        if (factorList) {
+            acc = [...new Set([...acc, ...factorList])]
+        }
+        return acc
+    }, [])
+
+const factorCRR = steps.AdwQueryOptionAndSummaryCriteria.data.factorCRR.filter(
+    (value) =&gt; topicList.find((topicValue) =&gt; value.factor_code == topicValue.factor_code) || factorFormulaList.includes(value.factor_code)
+)
+const variableCSR = steps.AdwQueryOptionAndSummaryCriteria.data.factorCSR.map((value) =&gt; value.variable_code).flat()
+const variableCRR = factorCRR.map((value) =&gt; value.variable_code).flat()
+let variableList = [] 
+
+if(queryConditionResult.crr_weight != null &amp;&amp; queryConditionResult.csr_weight == null){
+    variableList = [...new Set([...variableCRR])].filter((item) =&gt; item != null)
+}else if(queryConditionResult.crr_weight == null &amp;&amp; queryConditionResult.csr_weight != null){
+    variableList = [...new Set([...variablesOtherConditionList, ...variableCSR])].filter((item) =&gt; item != null)
+}else if (queryConditionResult.crr_weight != null &amp;&amp; queryConditionResult.csr_weight != null){
+    variableList = [...new Set([...variablesOtherConditionList,...variableCRR, ...variableCSR])].filter((item) =&gt; item != null)
+}
+
+// fix topic with codition
+topicList = topicList.map((value) =&gt; {
+    if (value.property?.condition) {
+        let objects = value.property?.condition?.find((value) =&gt; value.customerType == input.customerCode)
+        value.property = {...objects,...objects.property,condition:value.property.condition}
+    }
+    return value
+})
+
+let integrateCodeFilterOut = ['LOAN', 'LOAN_REQUEST_HEADER', 'CAP', 'CAP_INVESTMENT', 'CMS', 'CMS_JURISTIC']
+let variableCRRListFilter = steps.AdwQueryVariable.data.variable.filter((value) =&gt; variableList.includes(value.variable_code))
+
+if (input?.isInCBS) {
+    variableCRRListFilter = variableCRRListFilter.filter(item =&gt; 
+      !(integrateCodeFilterOut.includes(item.integrate_code) &amp;&amp; globalVariables.variableCRR.includes(item.variable_code))
+    )
+}
+
+if (["CREATE_LOAN","CHANGE_LOAN","OVERDRAFT"].includes(input.assessmentType) &amp;&amp; (steps.AdwQueryProductMaxtrix?.data?.listsNullType?.length &gt; 0 || steps.AdwQueryProductMaxtrix?.data?.listsOtherType?.length &gt; 0) &amp;&amp; queryConditionResult?.form_group == 'FG_1' &amp;&amp; queryConditionResult?.crr_weight != null) {
+    variableCRRListFilter = variableCRRListFilter.filter(item =&gt; 
+      !(["FIN","CAP"].includes(item.integrate_code) &amp;&amp; globalVariables.variableCRR.includes(item.variable_code))
+    )
+}
+
+
+// mapping output
+return (output = {
+    status: steps.LookupStatus,
+    data:  {
+              formSelect: formSelect,
+              isMultiForm: globalVariables.isMultiForm,
+              option: optionList,
+              optionSectionScore: optionSectionScoreList,
+              topic: topicList,
+              section: sectionList,
+              form: formList,
+              mapping: globalVariables.selectMapping ?? globalVariables.mapping[0],
+              summary: steps.AdwQueryFormAndSummary.data.summary,
+              summarySection: summarySectionList,
+              summaryTopic: summaryTopicList,
+              criteriaCRR: criteriaCRRList,
+              criteriaCSR: criteriaCSRList,
+              sectionCalculate: steps.AdwQueryTopicAndSummaryTopic.data.sectionCalculate,
+              factorCRR,
+              factorCSR: factorCSRList,
+              formulaCSR: steps.AdwQueryFormAndSummary.data.formulaCSR,
+              variable: variableCRRListFilter,
+          }
+})
+</Script>
+          <Tests />
+        </ProcessOutputScript>
+      </ProcessItemDefinition>
+      <BoundaryEvents />
+    </ScriptTask>
+    <ComponentTask
+      ItemId="6"
+      NextId="13"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQueryOptionAndSummaryCriteria">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>const queryTopicResult = steps.AdwQueryTopicAndSummaryTopic.data.topic
+const querySummarySectionResult = steps.AdwQuerySectionAndSummarySection.data.summarySection
+const queryFormResult = steps.AdwQueryFormAndSummary.data.form
+const querySectionCalculateResult = steps.AdwQueryTopicAndSummaryTopic.data.sectionCalculate
+const list = queryTopicResult.map(item =&gt; item.topic_code);
+const formulaCSR =  steps.AdwQueryFormAndSummary?.data?.formulaCSR?.[0]?.formula_code ?? ''
+
+let sectionCalculateCodeList = [...new Set(querySectionCalculateResult.map(item =&gt; item.section_calculate_code))]
+
+let factorFormulaList = querySectionCalculateResult.map(item =&gt; item.formula).reduce((acc, value) =&gt; {
+        const factorList = value.match(/FC_(\d+)/g)
+        if (factorList) {
+            acc = [...new Set([...acc, ...factorList])]
+        }
+        return acc
+}, [])
+
+let factorCodeList = [...new Set([...queryTopicResult.map(item =&gt; item.factor_code).filter(item=&gt;item != null),...factorFormulaList])];
+let FormList = [...new Set(queryFormResult.map(item =&gt; item.form_code))];
+let groupCriteriaList = [...new Set(querySummarySectionResult.map(item =&gt; item.group_criteria_code || ''))];
+if(globalVariables.selectForm){
+    FormList = queryFormResult.filter((value)=&gt;value.is_form_base || value.form_code === globalVariables.selectForm).map((value)=&gt;value.form_code)
+}
+
+result.variables = {
+  topic_code: list,
+  form_code: FormList,
+  group_criteria_code:groupCriteriaList,
+  factor_code: factorCodeList,
+  section_calculate_code: sectionCalculateCodeList,
+  formula_code: formulaCSR
+};
+
+result.query = `query MyQuery($form_code:[String]!, $topic_code: [String]!,$group_criteria_code:[String]!,$factor_code:[String]!,$section_calculate_code:[String]!, $formula_code:String) {
+  option:lps_corporate_loan_mas_corp_assessment_option(order_by: {option_seq: asc},where: {form_code: {_in: $form_code}, topic_code: {_in: $topic_code}}) {
+    form_code
+    max_range
+    min_range
+    option_input_type
+    option_seq
+    option_group
+    score
+    section_code
+    topic_code
+    section_calculate_code
+  }
+  optionSectionScore:lps_corporate_loan_mas_corp_assessment_option(order_by: {option_seq: asc},where: {form_code: {_in: $form_code}, section_calculate_code: {_in: $section_calculate_code}}) {
+    form_code
+    max_range
+    min_range
+    option_input_type
+    option_seq
+    option_group
+    score
+    section_code
+    topic_code
+    section_calculate_code
+  }
+  criteriaCRR:lps_corporate_loan_mas_corp_assessment_crr_criteria(where: {group_criteria_code: {_in: $group_criteria_code}}){
+    criteria_code
+    criteria_id
+    group_criteria_code
+    maximum_score
+    minimum_score
+    result_grade
+    isPass
+    condition
+  }
+  factorCRR:lps_corporate_loan_mas_corp_assessment_crr_factor(where: {factor_code: {_in: $factor_code }}) {
+    condition_code
+    factor_code
+    factor_id
+    factor_name
+    formula
+    variable_code
+  }
+  factorCSR:lps_corporate_loan_mas_corp_assessment_csr_factor(where:{formula_code:{_eq: $formula_code}}) {
+    coefficient
+    condition_code
+    description
+    factor_code
+    factor_id
+    factor_name
+    formula
+    formula_code
+    max
+    min
+    variable
+    variable_code
+  }
+  criteriaCSR:lps_corporate_loan_mas_corp_assessment_csr_criteria(where:{formula_code:{_eq: $formula_code}}) {
+    criteria_code
+    criteria_id
+    formula_code
+    grade
+    grade_desc
+    interest_rate_spread
+    interest_rate_type
+    isPass
+    maximum_pd
+    maximum_score
+    minimum_pd
+    minimum_score
+    result_desc
+    prefix
+  }
+}
+`;</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+          <string>steps</string>
+          <string>globalVariables</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="AdwQueryOptionAndSummaryCriteriaError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ComponentTask>
+    <Gateway
+      ItemId="7"
+      EnableMetricsCollection="false"
+      Name="conditionCheckForm"
+      GatewayType="Exclusive">
+      <Dependencies>
+        <string>steps</string>
+      </Dependencies>
+      <GatewayConnections>
+        <Connection
+          IsElse="false"
+          ToId="8">
+          <Condition>
+            <Script>return steps.AdwQueryFormAndSummary.data.form.length &gt; 1</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+        <Connection
+          IsElse="true"
+          ToId="10">
+          <Condition>
+            <Script>return false</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+      </GatewayConnections>
+    </Gateway>
+    <ScriptTask
+      ItemId="8"
+      NextId="10"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="mapConditionUsingForm">
+      <Dependencies>
+        <string>globalVariables</string>
+        <string>input</string>
+        <string>steps</string>
+      </Dependencies>
+      <ProcessItemDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <OutputSchema>{
+  "type": "object"
+}</OutputSchema>
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>let filter = ''
+
+steps.AdwQueryFormAndSummary.data.form.forEach((value) =&gt; {
+    if (value.property) {
+        if (value.property.businessType &amp;&amp; value.property.businessType.includes(input.bussinessType)) {
+            filter = value.form_code
+        }
+        if (value.property.customerCode &amp;&amp; value.property.customerCode.includes(input.customerCode)) {
+            filter = value.form_code
+        }
+        if (
+            value.property.groupType &amp;&amp;
+            value.property.groupType.includes(input.groupType) &amp;&amp;
+            value.property.accountType &amp;&amp;
+            value.property.accountType.includes(input.accountType)
+        ) {
+            filter = value.form_code
+        }
+        if (
+            value.property.groupType &amp;&amp;
+            value.property.groupType.includes(input.groupType) &amp;&amp;
+            !value.property.accountType &amp;&amp;
+            input.accountType != '8100'
+        ) {
+            filter = value.form_code
+        }
+        if (value.property.isMultiForm) {
+            globalVariables.isMultiForm = true
+        }
+    }
+})
+
+globalVariables.selectForm = filter
+</Script>
+          <Tests />
+        </ProcessOutputScript>
+      </ProcessItemDefinition>
+      <BoundaryEvents />
+    </ScriptTask>
+    <ComponentTask
+      ItemId="9"
+      NextId="6"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQueryTopicAndSummaryTopic">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>const querySectionResult = steps.AdwQuerySectionAndSummarySection.data.section
+const querySummarySectionResult = steps.AdwQuerySectionAndSummarySection.data.summarySection
+const queryFormResult = steps.AdwQueryFormAndSummary.data.form
+const SectionList = [...new Set(querySectionResult.map(item =&gt; item.section_code))];
+// const SummarySectionList = [...new Set(querySummarySectionResult.map(item =&gt; item.summary_section_code))];
+const SummarySectionList = [...new Set(
+  querySummarySectionResult
+    .filter(item =&gt; item.summary_section_code !== null &amp;&amp; item.summary_section_code !== undefined)
+    .map(item =&gt; item.summary_section_code)
+)];
+let FormList = [...new Set(queryFormResult.map(item =&gt; item.form_code))];
+if(globalVariables.selectForm){
+    FormList = queryFormResult.filter((value)=&gt;value.is_form_base || value.form_code === globalVariables.selectForm).map((value)=&gt;value.form_code)
+}
+
+result.variables = {
+  section_code: SectionList,
+  form_code: FormList,
+  SummarySectionList: SummarySectionList
+};
+
+result.query = `query MyQuery ($section_code:[String]!,$form_code:[String]!,$SummarySectionList:[String]!) {
+  topic:lps_corporate_loan_mas_corp_assessment_topic(order_by: {topic_seq: asc,section_code:asc},where: {form_code: {_in: $form_code}, section_code: {_in: $section_code}}) {
+    form_code
+    property
+    section_code
+    topic_code
+    topic_seq
+    factor_code
+  }
+  summaryTopic:lps_corporate_loan_mas_corp_assessment_summary_topic(order_by: {summary_topic_seq: asc},where:{summary_section_code:{_in:$SummarySectionList}}) {
+    summary_section_code
+    summary_topic_code
+    summary_topic_seq
+    summary_topic_input_type
+    summary_topic_type
+    topic_group
+    uom_text
+    name
+  }
+  sectionCalculate:lps_corporate_loan_mas_corp_assessment_section_calculate(where: {section_code: {_in: $section_code},form_code:{_in:$form_code}}){
+    formula
+    section_calculate_code
+    section_calculate_id
+    section_code
+    form_group
+    form_code
+  }
+}`;</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+          <string>steps</string>
+          <string>globalVariables</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="AdwQueryTopicAndSummaryTopicError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ComponentTask>
+    <ComponentTask
+      ItemId="10"
+      NextId="9"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQuerySectionAndSummarySection">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>const queryConditionResult = globalVariables.selectMapping ?? globalVariables.mapping[0]
+
+const queryFormResult = steps.AdwQueryFormAndSummary.data.form
+const querySummaryResult = steps.AdwQueryFormAndSummary.data.summary
+let summaryList = [...new Set(querySummaryResult.map(item =&gt; item.summary_code))];
+
+let FormList = [...new Set(queryFormResult.map(item =&gt; item.form_code))];
+if(globalVariables.selectForm){
+    FormList = queryFormResult.filter((value)=&gt;value.is_form_base || value.form_code === globalVariables.selectForm).map((value)=&gt;value.form_code)
+}
+
+result.variables = {
+  form_group: queryConditionResult.form_group,
+  form_code: FormList,
+  summary_code: summaryList
+};
+
+result.query = `query MyQuery ($form_code:[String]!,$form_group:String,$summary_code:[String]) {
+  section:lps_corporate_loan_mas_corp_assessment_section(order_by: {section_seq: asc}, where: {form_group: {_eq: $form_group},form_code:{_in:$form_code}}) {
+    form_code
+    property
+    section_code
+    section_seq
+    section_type
+  }
+  summarySection:lps_corporate_loan_mas_corp_assessment_summary_section(order_by: {summary_section_id: asc},where: {summary_code: {_in: $summary_code}}) {
+    group_criteria_code
+    is_sum
+    section_code
+    summary_code
+    summary_section_code
+    section_type
+    condition
+    is_show
+    sections
+  }
+}`;
+</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+          <string>steps</string>
+          <string>globalVariables</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="AdwQuerySectionAndSummarySectionError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ComponentTask>
+    <SubDecisionTask
+      ItemId="11"
+      NextId="5"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="LookupStatus">
+      <Dependencies>
+        <string>rawOutput</string>
+      </Dependencies>
+      <ProcessItemDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <OutputSchema>{
+  "type": "object",
+  "properties": {
+    "RuntimeOutput": {
+      "type": "object"
+    },
+    "Reasons": {
+      "description": "Decision reasons.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "Description": {
+            "type": "string"
+          },
+          "Code": {
+            "type": "integer"
+          },
+          "Category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "Delayed": { "type": "boolean" },
+          "Suppressed": { "type": "boolean" }			  
+        },
+        "required": [
+          "Description",
+          "Code",
+          "Category",
+		  "Delayed",
+		  "Suppressed"
+        ]
+      }
+    },
+    "Result": {
+      "description": "VerificationStatus of sub decision. 1 - Error, 2 - Rejected, 3 - Accepted.",
+      "type": "integer"
+    },
+    "ResultName": {
+      "type": "string",
+      "enum": [
+        "None",
+        "Error",
+        "Rejected",
+        "Accepted"
+      ]
+    }
+  },
+  "required": [
+    "RuntimeOutput",
+    "Reasons",
+    "Result",
+    "ResultName"
+  ]
+}</OutputSchema>
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput.RuntimeOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+      </ProcessItemDefinition>
+      <BoundaryEvents />
+    </SubDecisionTask>
+    <ScriptTask
+      ItemId="12"
+      NextId="11"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="StatusCode2000">
+      <Dependencies>
+        <string>globalVariables</string>
+      </Dependencies>
+      <ProcessItemDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <OutputSchema>{
+  "type": "object"
+}</OutputSchema>
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>globalVariables.statusCode = 2000;</Script>
+          <Tests />
+        </ProcessOutputScript>
+      </ProcessItemDefinition>
+      <BoundaryEvents />
+    </ScriptTask>
+    <ComponentTask
+      ItemId="13"
+      NextId="11"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQueryVariable">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>const queryFactorCRRResult = steps.AdwQueryOptionAndSummaryCriteria?.data?.factorCRR ?? []
+const queryFactorCSRResult = steps.AdwQueryOptionAndSummaryCriteria?.data?.factorCSR ?? []
+const variableCRRList = [...new Set((queryFactorCRRResult.reduce((accumulator,currentValue)=&gt;
+{
+    if(!currentValue.variable_code) return accumulator
+    return [ ...currentValue.variable_code,...accumulator]
+},[])))];
+const variableCSRList = [...new Set((queryFactorCSRResult.reduce((accumulator,currentValue)=&gt;{
+    if(!currentValue.variable_code) return accumulator
+    return [ ...currentValue.variable_code,...accumulator]
+},[])))];
+
+const topic = steps.AdwQueryTopicAndSummaryTopic?.data?.topic ?? []
+const topicVariable = topic.filter((value)=&gt; value?.property?.refVariable).reduce((acc,value)=&gt; {
+    if(value?.property?.refVariable){
+        acc.push(value?.property?.refVariable)
+    }
+    return acc
+},[])
+
+globalVariables.variableCRR = variableCRRList
+
+result.variables = {
+    variable_code: [...new Set([...variableCRRList,...variableCSRList, ...topicVariable])]
+};
+
+result.query = `query MyQuery($variable_code:[String]!) {
+  variable:lps_corporate_loan_mas_corp_assessment_variable(where: {variable_code: {_in: $variable_code }}) {
+    condition_code
+    variable_code
+    integrate_code
+  }
+}
+`;</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+          <string>steps</string>
+          <string>globalVariables</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="AdwQueryVariableError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ComponentTask>
+    <Gateway
+      ItemId="14"
+      EnableMetricsCollection="false"
+      Name="conditionCheckMapping"
+      GatewayType="Exclusive">
+      <Dependencies>
+        <string>steps</string>
+        <string>globalVariables</string>
+      </Dependencies>
+      <GatewayConnections>
+        <Connection
+          IsElse="false"
+          ToId="16">
+          <Condition>
+            <Script>return globalVariables.mapping.length &gt; 1</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+        <Connection
+          IsElse="true"
+          ToId="17">
+          <Condition>
+            <Script>return false</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+      </GatewayConnections>
+    </Gateway>
+    <ScriptTask
+      ItemId="15"
+      NextId="4"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="mapConditionUsingMapping">
+      <Dependencies>
+        <string>globalVariables</string>
+        <string>steps</string>
+        <string>input</string>
+      </Dependencies>
+      <ProcessItemDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <OutputSchema>{
+  "type": "object"
+}</OutputSchema>
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>const mapping = globalVariables.mapping
+const item = steps.AdwQueryAgricultural.data.master_mas_agricultural_p[0]
+const agricultural    = item?.occupation_agricultural === true
+const nonAgricultural = item?.occupation_agricultural !== true
+const defaultNonAgricultural = !agricultural &amp;&amp; !nonAgricultural
+
+const backendParamCrrCsr = steps.backend_parameter_CRR_CSR.data.result
+let backendParamConfig = backendParamCrrCsr.find(data =&gt; data.key_name === 'CRR_CSR_HIDE_SECTION')
+let arrayJsonBackendParamConfig = backendParamConfig.key_json_value
+
+//filter customerStatus new,old,all &amp; check total_debt 
+
+const perFilter = mapping.filter((value)=&gt;{
+    let isCheck = value.total_debt == null
+    if(value.total_debt &amp;&amp; value.prefix_debt){
+        if(value.prefix_debt == "&lt;="){
+            isCheck = input.loanAmount &lt;= value.total_debt
+        }else if(value.prefix_debt == "&gt;"){
+            isCheck = input.loanAmount &gt; value.total_debt
+        }
+    }
+    return (value.customer_status == input.customerStatus || value.customer_status == null) &amp;&amp; isCheck
+})
+
+//filter by purpose
+
+const filterByAccountType = perFilter.filter((value)=&gt; value.account_type == input.accountType)
+const filterByAccountGroup = perFilter.filter((value)=&gt; value.account_group == input.accountGroup &amp;&amp; value.account_group == "LN")
+const filterByAgriCultural = perFilter.filter(
+    (value)=&gt; value.account_group == "COM" 
+    &amp;&amp; value.occupation_agricultural == true 
+    &amp;&amp; (value.isic_group &amp;&amp; value.isic_group.includes(item?.formula_name ?? "")) 
+    &amp;&amp; agricultural
+    )
+const filterByNonAgriCultural = perFilter.filter((value)=&gt;  value.account_group == "COM" &amp;&amp; value.occupation_agricultural == false &amp;&amp; nonAgricultural)
+const filterByAllCondition = perFilter.filter((value)=&gt; value.account_group == null &amp;&amp; value.account_type == null &amp;&amp; value.occupation_agricultural == null)
+const filterByDefaultNonAgricultural = perFilter.filter((value)=&gt;  value.account_group == "COM" &amp;&amp; value.occupation_agricultural == false &amp;&amp; defaultNonAgricultural)
+
+if (input.customerCode == '603' || input.customerCode == '600') {
+    if (input.assessmentType == 'CREATE_LOAN' || input.assessmentType == 'CHANGE_LOAN' || input.assessmentType == 'OVERDRAFT') {
+        let checkConfigMatch = arrayJsonBackendParamConfig.find(eachValue =&gt; JSON.stringify(eachValue) === JSON.stringify([Number(input.accountType),Number(input.accountSubType),Number(input.marketCode)]))
+        if (
+            checkConfigMatch != undefined
+        ) {
+            if (filterByAccountGroup.length &gt; 0) {
+                globalVariables.selectMapping = filterByAccountGroup[0]
+                return filterByAccountGroup[0]
+            } else if (filterByAccountType.length &gt; 0) {
+                globalVariables.selectMapping = filterByAccountType[0]
+                return filterByAccountType[0]
+            } else if (filterByAgriCultural.length &gt; 0) {
+                globalVariables.selectMapping = filterByAgriCultural[0]
+                return filterByAgriCultural[0]
+            } else if (filterByNonAgriCultural.length &gt; 0) {
+                globalVariables.selectMapping = filterByNonAgriCultural[0]
+                return filterByNonAgriCultural[0]
+            } else if (filterByDefaultNonAgricultural.length &gt; 0) {
+                globalVariables.selectMapping = filterByDefaultNonAgricultural[0]
+                return filterByDefaultNonAgricultural[0]
+            }
+        } else {
+            if (filterByAllCondition.length &gt; 0) {
+                globalVariables.selectMapping = filterByAllCondition[0]
+                return filterByAllCondition[0]
+            } else {
+                throw new Error('not found')
+            }
+        }
+    } else if (
+        input.assessmentType == 'CREATE_DBM' ||
+        input.assessmentType == 'CHANGE_DBM' ||
+        input.assessmentType == 'AUTO_DBM'
+    ) {
+        if (input.accountType == '8200' || input.accountType == '8500') {
+            if (filterByAgriCultural.length &gt; 0) {
+                globalVariables.selectMapping = filterByAgriCultural[0]
+                return filterByAgriCultural[0]
+            } else if (filterByNonAgriCultural.length &gt; 0) {
+                globalVariables.selectMapping = filterByNonAgriCultural[0]
+                return filterByNonAgriCultural[0]
+            } else if (filterByAllCondition.length &gt; 0) {
+                globalVariables.selectMapping = filterByAllCondition[0]
+                return filterByAllCondition[0]
+            } else if (filterByDefaultNonAgricultural.length &gt; 0) {
+                globalVariables.selectMapping = filterByDefaultNonAgricultural[0]
+                return filterByDefaultNonAgricultural[0]
+            }
+        } else {
+            if (filterByAllCondition.length &gt; 0) {
+                globalVariables.selectMapping = filterByAllCondition[0]
+                return filterByAllCondition[0]
+            } else {
+                throw new Error('not found')
+            }
+        }
+    }
+}
+
+
+if (filterByAccountGroup.length &gt; 0) {
+    globalVariables.selectMapping = filterByAccountGroup[0]
+    return filterByAccountGroup[0]
+} else if (filterByAccountType.length &gt; 0) {
+    globalVariables.selectMapping = filterByAccountType[0]
+    return filterByAccountType[0]
+} else if (filterByAgriCultural.length &gt; 0) {
+    globalVariables.selectMapping = filterByAgriCultural[0]
+    return filterByAgriCultural[0]
+} else if (filterByNonAgriCultural.length &gt; 0) {
+    globalVariables.selectMapping = filterByNonAgriCultural[0]
+    return filterByNonAgriCultural[0]
+} else if (filterByAllCondition.length &gt; 0) {
+    globalVariables.selectMapping = filterByAllCondition[0]
+    return filterByAllCondition[0]
+} else if (filterByDefaultNonAgricultural.length &gt; 0) {
+    globalVariables.selectMapping = filterByDefaultNonAgricultural[0]
+    return filterByDefaultNonAgricultural[0]
+} else {
+    throw new Error('not found')
+}
+
+</Script>
+          <Tests />
+        </ProcessOutputScript>
+      </ProcessItemDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="mapConditionUsingMappingError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ScriptTask>
+    <ComponentTask
+      ItemId="16"
+      NextId="22"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQueryAgricultural">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>const isic = input.isicCode.split("|")
+
+function removeLeadingZeros(str) {
+  return str.replace(/^0+/, '');
+}
+
+const isicLevel1 = removeLeadingZeros(isic[0])
+const isicLevel2 = removeLeadingZeros(isic[1])
+const isicLevel3 = removeLeadingZeros(isic[2])
+const isicLevel4 = removeLeadingZeros(isic[3])
+const isicLevel5 = removeLeadingZeros(isic[4])
+
+result.variables = {
+    "isicsd" : removeLeadingZeros(isicLevel1),
+    "isicgc" : removeLeadingZeros(isicLevel2),
+    "isicts" : removeLeadingZeros(isicLevel3),
+    "isicsm" : removeLeadingZeros(isicLevel4),
+    "isicss" : removeLeadingZeros(isicLevel5)
+}
+
+result.query = `query MyQuery($isicsd: String = "", $isicgc: String = "", $isicts: String = "", $isicsm: String = "", $isicss: String = "") {
+  master_mas_agricultural_p(where: {isicgc: {_eq: $isicgc}, isicsd: {_eq: $isicsd}, isicsm: {_eq: $isicsm}, isicss: {_eq: $isicss}, isicts: {_eq: $isicts}}) {
+    formula_name
+    occupation_agricultural
+  }
+}`;</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents>
+        <BoundaryErrorEvent
+          Description=""
+          IsTerminating="false"
+          Name="AdwQueryAgriculturalError"
+          NextId="12" />
+      </BoundaryEvents>
+    </ComponentTask>
+    <Gateway
+      ItemId="17"
+      EnableMetricsCollection="false"
+      Name="checkExistingDataGateway"
+      GatewayType="Exclusive">
+      <Dependencies>
+        <string>globalVariables</string>
+        <string>steps</string>
+      </Dependencies>
+      <GatewayConnections>
+        <Connection
+          IsElse="false"
+          ToId="4">
+          <Condition>
+            <Script>const queryConditionResult = globalVariables.selectMapping ?? globalVariables.mapping[0]
+
+if (queryConditionResult?.data == null) {
+    return true
+} else {
+    globalVariables.isExist = true
+    return false
+}</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+        <Connection
+          IsElse="true"
+          ToId="11">
+          <Condition>
+            <Script>return false</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+      </GatewayConnections>
+    </Gateway>
+    <ScriptTask
+      ItemId="18"
+      NextId="20"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="setMappingFilters">
+      <Dependencies>
+        <string>globalVariables</string>
+        <string>input</string>
+        <string>steps</string>
+      </Dependencies>
+      <ProcessItemDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <OutputSchema>{
+  "type": "object"
+}</OutputSchema>
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>globalVariables.mapping = steps.AdwQueryMapping.data.mapping.filter((value)=&gt; value.assessment_type.includes(input.assessmentType))
+
+return globalVariables.mapping</Script>
+          <Tests />
+        </ProcessOutputScript>
+      </ProcessItemDefinition>
+      <BoundaryEvents />
+    </ScriptTask>
+    <ComponentTask
+      ItemId="19"
+      NextId="21"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="AdwQueryProductMaxtrix">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>result.variables = {
+    productConcat : `${input.accountGroup ?? ""}_${input.accountType ?? ""}_${input.accountSubType ?? ""}_${input.marketCode?? ""}_${input.projectCode ?? ""}`
+}
+
+result.query = `
+query MyQuery($productConcat: String = "") {
+  result: master_mas_product_matrix(where: {product_concat: {_eq: $productConcat}}) {
+    crr_flag
+    csr_flag
+  }
+  listsNullType: master_mas_product_matrix(where: {product_concat: {_eq: $productConcat},calculation_tool: {_is_null: true}}, limit: 1) {
+    product_concat
+  }
+  listsOtherType: master_mas_product_matrix(where: {product_concat: {_eq: $productConcat},calculation_tool: {_nin: ["CAP", "CAP_INVESTMENT"]}}, limit: 1) {
+    product_concat
+  }
+  
+}
+`</Script>
+        <ScriptDependencies>
+          <string>input</string>
+          <string>result</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents />
+    </ComponentTask>
+    <Gateway
+      ItemId="20"
+      EnableMetricsCollection="false"
+      Name="Copy_checkExistingDataGateway"
+      GatewayType="Exclusive">
+      <Dependencies>
+        <string>globalVariables</string>
+        <string>steps</string>
+        <string>input</string>
+      </Dependencies>
+      <GatewayConnections>
+        <Connection
+          IsElse="false"
+          ToId="19">
+          <Condition>
+            <Script>return ["CREATE_LOAN","CHANGE_LOAN","OVERDRAFT"].includes(input.assessmentType)
+
+</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+        <Connection
+          IsElse="true"
+          ToId="14">
+          <Condition>
+            <Script>return false</Script>
+            <Tests />
+          </Condition>
+        </Connection>
+      </GatewayConnections>
+    </Gateway>
+    <ScriptTask
+      ItemId="21"
+      NextId="14"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="mapConditionCRRandCSR">
+      <Dependencies>
+        <string>globalVariables</string>
+        <string>steps</string>
+      </Dependencies>
+      <ProcessItemDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <OutputSchema>{
+  "type": "object"
+}</OutputSchema>
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>const mapping = globalVariables.mapping
+const productMaxtrix = steps.AdwQueryProductMaxtrix.data.result
+if (productMaxtrix.length == 0 || (productMaxtrix[0].crr_flag == 'N' &amp;&amp; productMaxtrix[0].csr_flag == 'N')) {
+    throw new Error('not found')
+}
+
+globalVariables.mapping = mapping.filter((value) =&gt; {
+    if (productMaxtrix[0].crr_flag == 'Y' &amp;&amp; productMaxtrix[0].csr_flag == 'Y') {
+        return (
+            (value.crr_weight != null &amp;&amp; value.csr_weight != null) ||
+            (value.crr_weight == null &amp;&amp; value.csr_weight != null) ||
+            (value.crr_weight != null &amp;&amp; value.csr_weight == null)
+        )
+    } else if (productMaxtrix[0].crr_flag == 'Y' &amp;&amp; productMaxtrix[0].csr_flag == 'N') {
+        return value.crr_weight != null &amp;&amp; value.csr_weight == null
+    } else if (productMaxtrix[0].crr_flag == 'N' &amp;&amp; productMaxtrix[0].csr_flag == 'Y') {
+        return value.crr_weight == null &amp;&amp; value.csr_weight != null
+    }
+    return false
+})
+
+return globalVariables.mapping
+</Script>
+          <Tests />
+        </ProcessOutputScript>
+      </ProcessItemDefinition>
+      <BoundaryEvents />
+    </ScriptTask>
+    <ComponentTask
+      ItemId="22"
+      NextId="15"
+      Description=""
+      EnableMetricsCollection="false"
+      Name="backend_parameter_CRR_CSR">
+      <Dependencies />
+      <ComponentDefinition
+        ImmediateResponse="false"
+        ValidateOutput="false">
+        <SaveLastExecutionsCount
+          xsi:nil="true" />
+        <ProcessOutputScript>
+          <Script>return rawOutput;</Script>
+          <Tests />
+        </ProcessOutputScript>
+        <InputMappings />
+        <Script>result.variables = {
+    "keyGroup" : "CRR_CSR",
+    "keyName" : ["CRR_CSR_HIDE_SECTION"]
+}
+
+result.query = `query MyQuery($keyGroup: String, $keyName: [String!]) {
+  result: master_backend_parameter(where: {key_group: {_eq: $keyGroup}, _and: {key_name: {_in: $keyName}}}) {
+    key_name
+    key_json_value
+  }
+}`</Script>
+        <ScriptDependencies>
+          <string>result</string>
+        </ScriptDependencies>
+        <Tests />
+        <ComponentName>AdwQuery</ComponentName>
+      </ComponentDefinition>
+      <BoundaryEvents />
+    </ComponentTask>
+  </Items>
+  <EmbeddedRuntime
+    IsCustom="true"
+    Revision="6">
+    <Dependencies>
+      <Dependency>
+        <Name>input</Name>
+        <OutputJsonSchema>{
+  "type": "object",
+  "properties": {
+    "customerCode": {
+      "type": "string"
+    },
+    "accountType": {
+      "type": "string"
+    },
+    "accountGroup": {
+      "type": "string"
+    },
+    "isicCode": {
+      "type": "string"
+    },
+    "customerStatus": {
+      "type": "string"
+    },
+    "bussinessType": {
+      "type": "string"
+    },
+    "groupType": {
+      "type": "string"
+    },
+    "loanAmount": {
+      "type": "number"
+    },
+    "assessmentType": {
+      "type": "string"
+    },
+    "isInCBS": {
+      "type": "boolean"
+    },
+    "accountSubType": {
+      "type": "string"
+    },
+    "projectCode": {
+      "type": "string"
+    },
+    "marketCode": {
+      "type": "string"
+    }
+  }
+}</OutputJsonSchema>
+      </Dependency>
+      <Dependency>
+        <Name>output</Name>
+        <OutputJsonSchema>{ "type": "object" }</OutputJsonSchema>
+      </Dependency>
+      <Dependency>
+        <Name>globalVariables</Name>
+        <OutputJsonSchema>{ "type": "object" }</OutputJsonSchema>
+      </Dependency>
+    </Dependencies>
+  </EmbeddedRuntime>
+  <Schedule />
+  <SubWorkflows>
+    <SubWorkflow
+      FailIfNotAccepted="false"
+      Name="LookupStatus"
+      WorkflowName="StatusCodeDecision"
+      WorkflowVersion="0"
+      ValidateInput="true"
+      ValidateOutput="false">
+      <InputMappings />
+      <Script>result.statusCode = globalVariables.statusCode</Script>
+      <ScriptDependencies>
+        <string>result</string>
+        <string>globalVariables</string>
+      </ScriptDependencies>
+      <Tests />
+    </SubWorkflow>
+  </SubWorkflows>
+</ProcessWorkflowConfiguration>
