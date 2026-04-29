@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CreateWorkflowButton from "./CreateWorkflowButton";
 import { listWorkflowSummaries } from "@/lib/workflow-store";
 
 export const dynamic = "force-dynamic";
@@ -45,21 +46,24 @@ export default async function WorkflowsListPage() {
               : `${items.length} workflow${items.length === 1 ? "" : "s"} on disk.`}
           </div>
         </div>
-        <Link
-          href="/"
-          style={{
-            borderRadius: 8,
-            border: "1px solid #38bdf8",
-            background: "#0284c7",
-            padding: "9px 14px",
-            color: "#ffffff",
-            fontSize: 13,
-            fontWeight: 600,
-            textDecoration: "none",
-          }}
-        >
-          ← Back to canvas
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <CreateWorkflowButton />
+          <Link
+            href="/"
+            style={{
+              borderRadius: 8,
+              border: "1px solid #38bdf8",
+              background: "#0284c7",
+              padding: "9px 14px",
+              color: "#ffffff",
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            ← Back to canvas
+          </Link>
+        </div>
       </header>
 
       {items.length === 0 ? (
