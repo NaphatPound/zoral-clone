@@ -1,9 +1,26 @@
 import path from "node:path";
+import Link from "next/link";
 import GraphCanvas from "@/components/GraphCanvas";
 import { loadSampleWorkflow } from "@/lib/sample";
+import { readWorkflow } from "@/lib/workflow-store";
+import type { Workflow } from "@/lib/types";
 
-export default function Home() {
-  const workflow = loadSampleWorkflow(path.resolve(process.cwd()));
+export const dynamic = "force-dynamic";
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: { workflow?: string };
+}) {
+  const requestedId = searchParams?.workflow;
+  let workflow: Workflow | null = null;
+  if (requestedId) {
+    workflow = await readWorkflow(requestedId);
+  }
+  if (!workflow) {
+    workflow = loadSampleWorkflow(path.resolve(process.cwd()));
+  }
+  const loadedFromStore = Boolean(requestedId && workflow);
   return (
     <main
       style={{
@@ -53,11 +70,33 @@ export default function Home() {
             </div>
           </div>
           <div
-            className="text-[11px] text-slate-400"
-            style={{ fontSize: 12, color: "#94a3b8", maxWidth: "100%" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              fontSize: 12,
+              color: "#94a3b8",
+            }}
           >
-            Low-code node graph — right-click to add nodes, connect boxes with
-            handles, and use AI Assistant to summarize the workflow into Markdown
+            <span style={{ maxWidth: 480 }}>
+              {loadedFromStore
+                ? `Loaded from store · id ${requestedId}`
+                : "Low-code node graph — right-click to add nodes, connect boxes with handles, and AI-summarize into Markdown"}
+            </span>
+            <Link
+              href="/workflows"
+              style={{
+                borderRadius: 8,
+                border: "1px solid rgba(71, 85, 105, 0.95)",
+                padding: "6px 12px",
+                color: "#e2e8f0",
+                fontSize: 12,
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              Workflows
+            </Link>
           </div>
         </div>
       </header>

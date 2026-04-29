@@ -449,6 +449,10 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
   const [reactFlowInstance, setReactFlowInstance] = useState<
     ReactFlowInstance<FlowNodeData, FlowEdgeData> | null
   >(null);
+  const [workflowSaveStatus, setWorkflowSaveStatus] = useState<{
+    state: "idle" | "saving" | "saved" | "error";
+    message?: string;
+  }>({ state: "idle" });
   const documentation = useMemo(
     () => generateWorkflowDocumentation(workflowState),
     [workflowState],
@@ -542,6 +546,35 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
     setSelection(null);
     setEdgeSelection(null);
     setCreateMenu(null);
+  };
+
+  const handleSaveWorkflow = async () => {
+    setWorkflowSaveStatus({ state: "saving", message: "Saving workflow..." });
+    try {
+      const response = await fetch("/api/workflows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflow: workflowState }),
+      });
+      const payload = (await response.json()) as {
+        id?: string;
+        path?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.id) {
+        throw new Error(payload.error ?? "Failed to save workflow");
+      }
+      setWorkflowSaveStatus({
+        state: "saved",
+        message: `Saved as ${payload.id}`,
+      });
+    } catch (error) {
+      setWorkflowSaveStatus({
+        state: "error",
+        message:
+          error instanceof Error ? error.message : "Failed to save workflow",
+      });
+    }
   };
 
   const handleAutoLayout = () => {
@@ -877,6 +910,43 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
           />
           <button
             type="button"
+            onClick={handleSaveWorkflow}
+            disabled={workflowSaveStatus.state === "saving"}
+            className="rounded-md border border-emerald-400 bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              borderRadius: 8,
+              border: "1px solid #34d399",
+              background: "#059669",
+              padding: "10px 14px",
+              color: "#ffffff",
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            {workflowSaveStatus.state === "saving"
+              ? "Saving..."
+              : "Save Workflow"}
+          </button>
+          <a
+            href="/workflows"
+            className="rounded-md border border-slate-500 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-slate-700"
+            style={{
+              borderRadius: 8,
+              border: "1px solid rgba(100, 116, 139, 0.95)",
+              background: "rgba(15, 23, 42, 0.85)",
+              padding: "10px 14px",
+              color: "#e2e8f0",
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+              textDecoration: "none",
+            }}
+          >
+            Workflows
+          </a>
+          <button
+            type="button"
             onClick={() => downloadJson(workflowState)}
             className="rounded-md border border-sky-400 bg-sky-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-sky-500"
             style={{
@@ -893,6 +963,34 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
             Download JSON
           </button>
         </div>
+        {workflowSaveStatus.message ? (
+          <div
+            style={{
+              position: "absolute",
+              top: 60,
+              right: 16,
+              zIndex: 20,
+              borderRadius: 8,
+              border: `1px solid ${
+                workflowSaveStatus.state === "error"
+                  ? "#fb7185"
+                  : "rgba(71, 85, 105, 0.95)"
+              }`,
+              background: "rgba(15, 23, 42, 0.92)",
+              padding: "6px 10px",
+              fontSize: 12,
+              color:
+                workflowSaveStatus.state === "error"
+                  ? "#fda4af"
+                  : workflowSaveStatus.state === "saved"
+                    ? "#86efac"
+                    : "#cbd5e1",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            {workflowSaveStatus.message}
+          </div>
+        ) : null}
         {createMenu ? (
           <div
             className="absolute z-20 w-[280px] rounded-xl border border-slate-700 bg-slate-950/95 p-2 shadow-2xl backdrop-blur"
