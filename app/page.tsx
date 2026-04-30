@@ -101,7 +101,10 @@ export default async function Home({
         </div>
       </header>
       <div className="pt-12" style={{ paddingTop: 88 }}>
-        <GraphCanvas workflow={workflow} />
+        <GraphCanvas
+          workflow={workflow}
+          workflowId={loadedFromStore ? requestedId : undefined}
+        />
       </div>
     </main>
   );

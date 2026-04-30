@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   Background,
   type Connection,
@@ -434,7 +434,13 @@ function connectionFromPending(
   };
 }
 
-export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
+export default function GraphCanvas({
+  workflow,
+  workflowId,
+}: {
+  workflow: Workflow;
+  workflowId?: string;
+}) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const pendingConnectionRef = useRef<PendingConnection | null>(null);
   const connectionCompletedRef = useRef(false);
@@ -492,9 +498,85 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    if (!assistantOpen) {
+      setAssistantDocument(documentation);
+      setAssistantGenerationStatus({ state: "idle", source: "local" });
+    }
+  }, [assistantOpen, documentation]);
+
+  // Replace every piece of in-canvas state with a freshly-loaded workflow.
+  // Used both for the initial mount and for re-syncs from disk (auto-watch
+  // and the manual Reload button). Camera position is left alone — ReactFlow
+  // only fitView's once at mount, so the user's pan/zoom is preserved.
+  const applyWorkflow = useCallback(
+    (next: Workflow) => {
+      const nextFlow = toReactFlow(next);
+      setWorkflowState(
+        syncWorkflowPositions(next, nextFlow.nodes as FlowNode[]),
+      );
+      setNodes(nextFlow.nodes as FlowNode[]);
+      setEdges(nextFlow.edges as FlowEdge[]);
+      setSelection(null);
+      setCreateMenu(null);
+      pendingConnectionRef.current = null;
+      connectionCompletedRef.current = false;
+      suppressNextPaneClickRef.current = false;
+      setAssistantOpen(false);
+      setAssistantDocument(generateWorkflowDocumentation(next));
+      setAssistantGenerationStatus({ state: "idle", source: "local" });
+      setSaveStatus({ state: "idle" });
+      setRunResult(null);
+    },
+    [setEdges, setNodes],
+  );
+
+  useEffect(() => {
+    applyWorkflow(workflow);
+  }, [workflow, applyWorkflow]);
+
+  const [reloadStatus, setReloadStatus] = useState<{
+    state: "idle" | "loading" | "ok" | "error";
+    message?: string;
+  }>({ state: "idle" });
+
+  const reloadFromDisk = useCallback(
+    async (silent = false) => {
+      if (!workflowId) return;
+      if (!silent) setReloadStatus({ state: "loading", message: "Reloading..." });
+      try {
+        const response = await fetch(
+          `/api/workflows/${encodeURIComponent(workflowId)}`,
+        );
+        const payload = (await response.json()) as {
+          workflow?: Workflow;
+          error?: string;
+        };
+        if (!response.ok || !payload.workflow) {
+          throw new Error(payload.error ?? "Failed to load workflow");
+        }
+        applyWorkflow(payload.workflow);
+        if (!silent) {
+          setReloadStatus({
+            state: "ok",
+            message: "Reloaded from disk.",
+          });
+        }
+      } catch (error) {
+        setReloadStatus({
+          state: "error",
+          message:
+            error instanceof Error ? error.message : "Failed to reload",
+        });
+      }
+    },
+    [workflowId, applyWorkflow],
+  );
+
   // Watch saved-workflows/ via the WS endpoint exposed by server.js so the
   // canvas can flash a banner when Claude Code (or any other tool) writes a
-  // new graph. Clicking the banner navigates to /workflows.
+  // new graph. If the changed file matches the workflow currently loaded
+  // (?workflow=<id>), auto-reload it into the canvas state.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -502,10 +584,21 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
     ws.addEventListener("message", (event) => {
       try {
         const msg = JSON.parse(event.data) as { type?: string; filePath?: string };
-        if (msg.type === "workflow:add" || msg.type === "workflow:change") {
-          const name = msg.filePath?.split("/").pop() ?? "workflow";
-          setWorkflowChangeFlash(`saved-workflows/${name} updated`);
-          window.setTimeout(() => setWorkflowChangeFlash(null), 6000);
+        if (msg.type !== "workflow:add" && msg.type !== "workflow:change") return;
+
+        const name = msg.filePath?.split("/").pop() ?? "workflow";
+        const idFromFile = name.replace(/\.json$/, "");
+        const matchesActive = !!workflowId && idFromFile === workflowId;
+
+        setWorkflowChangeFlash(
+          matchesActive
+            ? `saved-workflows/${name} updated — reloading...`
+            : `saved-workflows/${name} updated`,
+        );
+        window.setTimeout(() => setWorkflowChangeFlash(null), 6000);
+
+        if (matchesActive) {
+          void reloadFromDisk(true);
         }
       } catch {
         // ignore non-JSON
@@ -514,32 +607,7 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
     return () => {
       try { ws.close(); } catch { /* ignore */ }
     };
-  }, []);
-
-  useEffect(() => {
-    if (!assistantOpen) {
-      setAssistantDocument(documentation);
-      setAssistantGenerationStatus({ state: "idle", source: "local" });
-    }
-  }, [assistantOpen, documentation]);
-
-  useEffect(() => {
-    const nextFlow = toReactFlow(workflow);
-    setWorkflowState(
-      syncWorkflowPositions(workflow, nextFlow.nodes as FlowNode[]),
-    );
-    setNodes(nextFlow.nodes as FlowNode[]);
-    setEdges(nextFlow.edges as FlowEdge[]);
-    setSelection(null);
-    setCreateMenu(null);
-    pendingConnectionRef.current = null;
-    connectionCompletedRef.current = false;
-    suppressNextPaneClickRef.current = false;
-    setAssistantOpen(false);
-    setAssistantDocument(generateWorkflowDocumentation(workflow));
-    setAssistantGenerationStatus({ state: "idle", source: "local" });
-    setSaveStatus({ state: "idle" });
-  }, [workflow, setEdges, setNodes]);
+  }, [workflowId, reloadFromDisk]);
 
   const openCreateMenu = (
     clientPoint: { x: number; y: number },
@@ -1033,6 +1101,27 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
               outline: "none",
             }}
           />
+          {workflowId ? (
+            <button
+              type="button"
+              onClick={() => void reloadFromDisk(false)}
+              disabled={reloadStatus.state === "loading"}
+              title={`Reload saved-workflows/${workflowId}.json from disk`}
+              className="rounded-md border border-cyan-400 bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                borderRadius: 8,
+                border: "1px solid #22d3ee",
+                background: "#0e7490",
+                padding: "10px 14px",
+                color: "#ffffff",
+                fontSize: 14,
+                fontWeight: 600,
+                boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+              }}
+            >
+              {reloadStatus.state === "loading" ? "Reloading..." : "↻ Reload"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={handleSaveWorkflow}
@@ -1088,7 +1177,7 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
             Download JSON
           </button>
         </div>
-        {workflowSaveStatus.message ? (
+        {workflowSaveStatus.message || reloadStatus.message ? (
           <div
             style={{
               position: "absolute",
@@ -1097,7 +1186,7 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
               zIndex: 20,
               borderRadius: 8,
               border: `1px solid ${
-                workflowSaveStatus.state === "error"
+                workflowSaveStatus.state === "error" || reloadStatus.state === "error"
                   ? "#fb7185"
                   : "rgba(71, 85, 105, 0.95)"
               }`,
@@ -1105,15 +1194,19 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
               padding: "6px 10px",
               fontSize: 12,
               color:
-                workflowSaveStatus.state === "error"
+                workflowSaveStatus.state === "error" || reloadStatus.state === "error"
                   ? "#fda4af"
-                  : workflowSaveStatus.state === "saved"
+                  : workflowSaveStatus.state === "saved" || reloadStatus.state === "ok"
                     ? "#86efac"
                     : "#cbd5e1",
               backdropFilter: "blur(12px)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
             }}
           >
-            {workflowSaveStatus.message}
+            {workflowSaveStatus.message ? <div>{workflowSaveStatus.message}</div> : null}
+            {reloadStatus.message ? <div>{reloadStatus.message}</div> : null}
           </div>
         ) : null}
         {createMenu ? (
