@@ -99,6 +99,20 @@ export default async function Home({
               {loadedFromStore ? `Loaded · id ${requestedId}` : "Sample workflow"}
             </span>
             <Link
+              href="/docs"
+              style={{
+                borderRadius: 8,
+                border: "1px solid rgba(71, 85, 105, 0.95)",
+                padding: "6px 12px",
+                color: "#e2e8f0",
+                fontSize: 12,
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
+            >
+              API Docs
+            </Link>
+            <Link
               href="/workflows"
               style={{
                 borderRadius: 8,
