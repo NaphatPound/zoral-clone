@@ -254,33 +254,38 @@ export default function TerminalPanel({
     send({ type: "input", terminalId: tid, data: "" });
   };
 
-  // Drag handle on the right edge to resize the panel.
-  useEffect(() => {
-    function onMove(e: MouseEvent) {
-      if (dragStartXRef.current === null) return;
-      const delta = e.clientX - dragStartXRef.current;
-      const next = Math.min(
-        MAX_WIDTH,
-        Math.max(MIN_WIDTH, dragStartWidthRef.current + delta),
-      );
-      onResize(next);
-    }
-    function onUp() {
-      dragStartXRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    }
-    function onDown(e: MouseEvent) {
-      dragStartXRef.current = e.clientX;
+  const beginResize = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dragStartXRef.current = event.clientX;
       dragStartWidthRef.current = width;
-      window.addEventListener("mousemove", onMove);
-      window.addEventListener("mouseup", onUp);
-    }
-    const node = document.getElementById("terminal-resize-handle");
-    if (!node) return;
-    node.addEventListener("mousedown", onDown);
-    return () => node.removeEventListener("mousedown", onDown);
-  }, [width, onResize]);
+      // Use the document so the drag survives leaving the handle box.
+      const onMove = (e: MouseEvent) => {
+        if (dragStartXRef.current === null) return;
+        const delta = e.clientX - dragStartXRef.current;
+        const next = Math.min(
+          MAX_WIDTH,
+          Math.max(MIN_WIDTH, dragStartWidthRef.current + delta),
+        );
+        onResize(next);
+      };
+      const onUp = () => {
+        dragStartXRef.current = null;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      // While dragging, force the cursor everywhere and disable text selection
+      // so dragging over the canvas doesn't flip the cursor or highlight nodes.
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [width, onResize],
+  );
 
   if (!open) return null;
 
@@ -475,18 +480,34 @@ export default function TerminalPanel({
       </form>
 
       <div
-        id="terminal-resize-handle"
+        onMouseDown={beginResize}
+        title="Drag to resize"
         style={{
           position: "absolute",
           top: 0,
-          right: -3,
-          width: 6,
+          right: -5,
+          width: 10,
           height: "100%",
           cursor: "col-resize",
           background: "transparent",
-          zIndex: 26,
+          zIndex: 30,
         }}
-      />
+      >
+        {/* Hairline so the user can see where to grab. */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 4,
+            width: 2,
+            height: "100%",
+            background: "rgba(56, 189, 248, 0.0)",
+            transition: "background 120ms ease",
+            pointerEvents: "none",
+          }}
+          className="terminal-resize-line"
+        />
+      </div>
     </aside>
   );
 }
