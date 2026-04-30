@@ -1,11 +1,16 @@
 import Link from "next/link";
 import CreateWorkflowButton from "./CreateWorkflowButton";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { listWorkflowSummaries } from "@/lib/workflow-store";
+import { readWorkspaceConfig } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
 export default async function WorkflowsListPage() {
-  const items = await listWorkflowSummaries();
+  const [items, workspace] = await Promise.all([
+    listWorkflowSummaries(),
+    readWorkspaceConfig(),
+  ]);
 
   return (
     <main
@@ -29,7 +34,7 @@ export default async function WorkflowsListPage() {
           flexWrap: "wrap",
         }}
       >
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div
             style={{
               fontSize: 22,
@@ -38,15 +43,16 @@ export default async function WorkflowsListPage() {
               letterSpacing: "-0.01em",
             }}
           >
-            Saved Workflows
+            Workflows
           </div>
           <div style={{ marginTop: 4, fontSize: 13, color: "#94a3b8" }}>
             {items.length === 0
-              ? "Nothing saved yet — open a workflow on the canvas and click Save."
-              : `${items.length} workflow${items.length === 1 ? "" : "s"} on disk.`}
+              ? "No flows in this folder yet — switch workspace, create a new one, or save from the canvas."
+              : `${items.length} flow${items.length === 1 ? "" : "s"} in this folder.`}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <WorkspaceSwitcher active={workspace.active} recent={workspace.recent} />
           <CreateWorkflowButton />
           <Link
             href="/"

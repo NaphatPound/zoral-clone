@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { getActiveWorkspace } from "./workspace";
 import type { Workflow } from "./types";
-
-export const WORKFLOW_STORE_DIR = "saved-workflows";
 
 export interface WorkflowSummary {
   id: string;
@@ -28,20 +27,15 @@ export function slugify(value: string): string {
   return clean || "workflow";
 }
 
-function storeDir(): string {
-  return path.join(process.cwd(), WORKFLOW_STORE_DIR);
-}
-
-async function ensureDir(): Promise<string> {
-  const dir = storeDir();
-  await fs.mkdir(dir, { recursive: true });
-  return dir;
+async function storeDir(): Promise<string> {
+  return getActiveWorkspace();
 }
 
 export async function listWorkflowSummaries(): Promise<WorkflowSummary[]> {
+  const dir = await storeDir();
   let entries: string[] = [];
   try {
-    entries = await fs.readdir(storeDir());
+    entries = await fs.readdir(dir);
   } catch {
     return [];
   }
@@ -49,7 +43,7 @@ export async function listWorkflowSummaries(): Promise<WorkflowSummary[]> {
     entries
       .filter((name) => name.endsWith(".json"))
       .map(async (filename) => {
-        const filePath = path.join(storeDir(), filename);
+        const filePath = path.join(dir, filename);
         const stat = await fs.stat(filePath);
         let runtimeName: string | undefined;
         let nodeCount = 0;
@@ -80,7 +74,8 @@ export async function listWorkflowSummaries(): Promise<WorkflowSummary[]> {
 export async function readWorkflow(id: string): Promise<Workflow | null> {
   if (!isSafeWorkflowId(id)) return null;
   try {
-    const filePath = path.join(storeDir(), `${id}.json`);
+    const dir = await storeDir();
+    const filePath = path.join(dir, `${id}.json`);
     const text = await fs.readFile(filePath, "utf8");
     return JSON.parse(text) as Workflow;
   } catch {
@@ -92,13 +87,13 @@ export async function saveWorkflow(
   workflow: Workflow,
   options?: { id?: string },
 ): Promise<{ id: string; filePath: string }> {
-  await ensureDir();
+  const dir = await storeDir();
   const slug = slugify(workflow.meta?.runtimeName ?? "workflow");
   const id =
     options?.id && isSafeWorkflowId(options.id)
       ? options.id
       : `${slug}-${Date.now()}`;
-  const filePath = path.join(storeDir(), `${id}.json`);
+  const filePath = path.join(dir, `${id}.json`);
   await fs.writeFile(filePath, JSON.stringify(workflow, null, 2), "utf8");
   return { id, filePath };
 }
@@ -106,7 +101,8 @@ export async function saveWorkflow(
 export async function deleteWorkflow(id: string): Promise<boolean> {
   if (!isSafeWorkflowId(id)) return false;
   try {
-    await fs.unlink(path.join(storeDir(), `${id}.json`));
+    const dir = await storeDir();
+    await fs.unlink(path.join(dir, `${id}.json`));
     return true;
   } catch {
     return false;

@@ -28,7 +28,24 @@ try {
 const PORT = Number(process.env.PORT || 3002);
 const dev = process.env.NODE_ENV !== 'production';
 const projectRoot = path.resolve(__dirname);
-const savedDir = path.join(projectRoot, 'saved-workflows');
+const fallbackDir = path.join(projectRoot, 'saved-workflows');
+const configFile = path.join(projectRoot, '.zoral-workspace.json');
+
+function readActiveWorkspace() {
+  try {
+    const text = fs.readFileSync(configFile, 'utf8');
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed.active === 'string' && path.isAbsolute(parsed.active)) {
+      return parsed.active;
+    }
+  } catch {
+    // Missing / corrupt — fall through to default.
+  }
+  return fallbackDir;
+}
+
+let activeWorkspace = readActiveWorkspace();
+if (!fs.existsSync(activeWorkspace)) fs.mkdirSync(activeWorkspace, { recursive: true });
 
 const app = next({ dev, dir: projectRoot });
 const handle = app.getRequestHandler();
@@ -40,7 +57,10 @@ function spawnTerminal({ cols = 100, rows = 30, cwd } = {}) {
   if (!pty) throw new Error('node-pty unavailable on this host');
   const id = randomUUID();
   const shell = process.env.SHELL || (os.platform() === 'win32' ? 'powershell.exe' : '/bin/zsh');
-  const startDir = cwd && fs.existsSync(cwd) ? cwd : projectRoot;
+  // Default to the active workspace so claude code lands in the user's
+  // chosen IDE folder. Caller can still override via the `cwd` arg.
+  const fallback = activeWorkspace && fs.existsSync(activeWorkspace) ? activeWorkspace : projectRoot;
+  const startDir = cwd && fs.existsSync(cwd) ? cwd : fallback;
 
   const ptyProcess = pty.spawn(shell, [], {
     name: 'xterm-256color',
@@ -103,18 +123,49 @@ function broadcastWatcher(payload) {
   }
 }
 
-if (!fs.existsSync(savedDir)) fs.mkdirSync(savedDir, { recursive: true });
+// Keep a single workflow watcher pointed at whatever the active workspace
+// resolves to right now. When the user picks a new folder via /api/workspace,
+// the config file changes; we tear down and re-attach the watcher to the
+// new directory so banner events keep flowing.
+let workflowWatcher = null;
+function attachWorkflowWatcher(dir) {
+  if (workflowWatcher) {
+    workflowWatcher.close().catch(() => {});
+    workflowWatcher = null;
+  }
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+  }
+  workflowWatcher = chokidar.watch(dir, {
+    ignored: /(^|[\/\\])\../,
+    ignoreInitial: true,
+    awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 50 },
+  });
+  workflowWatcher
+    .on('add', (filePath) => broadcastWatcher({ type: 'workflow:add', filePath }))
+    .on('change', (filePath) => broadcastWatcher({ type: 'workflow:change', filePath }))
+    .on('unlink', (filePath) => broadcastWatcher({ type: 'workflow:remove', filePath }));
+}
+attachWorkflowWatcher(activeWorkspace);
 
-const watcher = chokidar.watch(savedDir, {
-  ignored: /(^|[\/\\])\../,
+// Watch the workspace config file itself; when it changes (e.g. user POSTs to
+// /api/workspace), pick up the new active dir without needing a restart.
+const configWatcher = chokidar.watch(configFile, {
   ignoreInitial: true,
-  awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 50 },
+  awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 },
 });
+configWatcher
+  .on('add', () => onConfigChange())
+  .on('change', () => onConfigChange());
 
-watcher
-  .on('add', (filePath) => broadcastWatcher({ type: 'workflow:add', filePath }))
-  .on('change', (filePath) => broadcastWatcher({ type: 'workflow:change', filePath }))
-  .on('unlink', (filePath) => broadcastWatcher({ type: 'workflow:remove', filePath }));
+function onConfigChange() {
+  const next = readActiveWorkspace();
+  if (next === activeWorkspace) return;
+  activeWorkspace = next;
+  attachWorkflowWatcher(activeWorkspace);
+  broadcastWatcher({ type: 'workspace:change', dir: activeWorkspace });
+  console.log(`[server] workspace switched -> ${activeWorkspace}`);
+}
 
 // ─── Boot Next + HTTP + WS ────────────────────────────────────────
 app.prepare().then(() => {
@@ -216,15 +267,15 @@ app.prepare().then(() => {
 
   watcherWss.on('connection', (ws) => {
     watcherClients.add(ws);
-    ws.send(JSON.stringify({ type: 'ready', dir: savedDir }));
+    ws.send(JSON.stringify({ type: 'ready', dir: activeWorkspace }));
     ws.on('close', () => watcherClients.delete(ws));
   });
 
   httpServer.listen(PORT, () => {
     console.log(`▶ Zoral Clone — http://localhost:${PORT}`);
-    console.log(`  cwd:        ${projectRoot}`);
+    console.log(`  project:    ${projectRoot}`);
+    console.log(`  workspace:  ${activeWorkspace}`);
     console.log(`  terminal:   ${pty ? 'enabled (node-pty)' : 'disabled (node-pty failed to load)'}`);
-    console.log(`  watching:   ${savedDir}`);
   });
 });
 
@@ -234,7 +285,8 @@ function shutdown() {
   for (const term of terminals.values()) {
     try { term.pty.kill(); } catch { /* ignore */ }
   }
-  watcher.close().catch(() => {});
+  if (workflowWatcher) workflowWatcher.close().catch(() => {});
+  configWatcher.close().catch(() => {});
   process.exit(0);
 }
 process.on('SIGINT', shutdown);

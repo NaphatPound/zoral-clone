@@ -3,6 +3,7 @@ import Link from "next/link";
 import GraphCanvas from "@/components/GraphCanvas";
 import { loadSampleWorkflow } from "@/lib/sample";
 import { readWorkflow } from "@/lib/workflow-store";
+import { readWorkspaceConfig } from "@/lib/workspace";
 import type { Workflow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export default async function Home({
     workflow = loadSampleWorkflow(path.resolve(process.cwd()));
   }
   const loadedFromStore = Boolean(requestedId && workflow);
+  const workspace = await readWorkspaceConfig();
   return (
     <main
       style={{
@@ -78,10 +80,23 @@ export default async function Home({
               color: "#94a3b8",
             }}
           >
-            <span style={{ maxWidth: 480 }}>
-              {loadedFromStore
-                ? `Loaded from store · id ${requestedId}`
-                : "Low-code node graph — right-click to add nodes, connect boxes with handles, and AI-summarize into Markdown"}
+            <span
+              title={workspace.active}
+              style={{
+                maxWidth: 380,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                fontSize: 11,
+                color: "#94a3b8",
+              }}
+            >
+              📂 {workspace.active}
+            </span>
+            <span style={{ maxWidth: 380 }}>
+              {loadedFromStore ? `Loaded · id ${requestedId}` : "Sample workflow"}
             </span>
             <Link
               href="/workflows"

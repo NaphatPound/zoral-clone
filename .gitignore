@@ -7,3 +7,4 @@ coverage
 tsconfig.tsbuildinfo
 generated-docs
 saved-workflows
+.zoral-workspace.json
