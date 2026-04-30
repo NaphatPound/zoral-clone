@@ -22,11 +22,26 @@ const KIND_STYLES: Record<NodeKind, { background: string; borderColor: string; c
   unknown: { background: "#475569", borderColor: "#94a3b8", color: "#ffffff" },
 };
 
+type RunStatus = "ok" | "skipped" | "error";
+
 interface NodeCardData {
   label: string;
   node: WorkflowNode;
   dim?: boolean;
+  runStatus?: RunStatus;
 }
+
+const RUN_STATUS_RING: Record<RunStatus, string> = {
+  ok: "0 0 0 3px rgba(34,197,94,0.65)",
+  skipped: "0 0 0 3px rgba(250,204,21,0.65)",
+  error: "0 0 0 3px rgba(248,113,113,0.7)",
+};
+
+const RUN_STATUS_BADGE: Record<RunStatus, { background: string; label: string }> = {
+  ok: { background: "#22c55e", label: "ok" },
+  skipped: { background: "#facc15", label: "skipped" },
+  error: { background: "#f87171", label: "error" },
+};
 
 const HANDLE_STYLE = {
   width: 14,
@@ -49,9 +64,10 @@ function HandlesForKind(_props: { kind: NodeKind }) {
 }
 
 export default function NodeCard({ data }: { data: NodeCardData }) {
-  const { node, dim } = data;
+  const { node, dim, runStatus } = data;
   const color = KIND_COLORS[node.kind] ?? KIND_COLORS.unknown;
   const inlineStyle = KIND_STYLES[node.kind] ?? KIND_STYLES.unknown;
+  const runRing = runStatus ? RUN_STATUS_RING[runStatus] : null;
   const isCondition = node.kind === "condition";
   const conditionPreview =
     isCondition && node.description
@@ -73,11 +89,33 @@ export default function NodeCard({ data }: { data: NodeCardData }) {
         background: inlineStyle.background,
         padding: isCondition ? "6px 10px" : "10px 12px",
         color: inlineStyle.color,
-        boxShadow: "0 12px 24px rgba(15, 23, 42, 0.28)",
+        boxShadow: runRing
+          ? `${runRing}, 0 12px 24px rgba(15, 23, 42, 0.28)`
+          : "0 12px 24px rgba(15, 23, 42, 0.28)",
         opacity: dim ? 0.25 : 1,
+        position: "relative",
       }}
     >
       <HandlesForKind kind={node.kind} />
+      {runStatus ? (
+        <div
+          style={{
+            position: "absolute",
+            top: -10,
+            right: -8,
+            background: RUN_STATUS_BADGE[runStatus].background,
+            color: "#0f172a",
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            padding: "2px 6px",
+            borderRadius: 999,
+            boxShadow: "0 2px 6px rgba(15,23,42,0.45)",
+          }}
+        >
+          {RUN_STATUS_BADGE[runStatus].label}
+        </div>
+      ) : null}
       <div
         className="text-[10px] uppercase tracking-wider opacity-75"
         style={{

@@ -22,13 +22,24 @@ import { toReactFlow } from "@/lib/parser";
 import NodeCard from "./NodeCard";
 import DetailsPanel from "./DetailsPanel";
 import Legend from "./Legend";
+import RunPanel from "./RunPanel";
 import StaticGraphPreview from "./StaticGraphPreview";
 import WorkflowAssistantPanel from "./WorkflowAssistantPanel";
 import WorkflowEdgeView, { type FlowEdgeData } from "./WorkflowEdge";
+import {
+  statusByNodeId,
+  type ExecutionResult,
+  type StepStatus,
+} from "@/lib/workflow-runtime";
 
 const nodeTypes = { zoralNode: NodeCard };
 const edgeTypes = { workflowEdge: WorkflowEdgeView };
-type FlowNodeData = { label: string; node: WorkflowNode; dim?: boolean };
+type FlowNodeData = {
+  label: string;
+  node: WorkflowNode;
+  dim?: boolean;
+  runStatus?: StepStatus;
+};
 type FlowNode = Node<FlowNodeData>;
 type FlowEdge = Edge<FlowEdgeData>;
 type SelectedItem =
@@ -453,6 +464,12 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
     state: "idle" | "saving" | "saved" | "error";
     message?: string;
   }>({ state: "idle" });
+  const [runOpen, setRunOpen] = useState(false);
+  const [runResult, setRunResult] = useState<ExecutionResult | null>(null);
+  const runStatuses = useMemo(
+    () => (runResult ? statusByNodeId(runResult) : new Map<string, StepStatus>()),
+    [runResult],
+  );
   const documentation = useMemo(
     () => generateWorkflowDocumentation(workflowState),
     [workflowState],
@@ -818,7 +835,11 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
 
     const rfNodes: FlowNode[] = nodes.map((n) => ({
       ...n,
-      data: { ...n.data, dim: term ? !matches.has(n.id) : false },
+      data: {
+        ...n.data,
+        dim: term ? !matches.has(n.id) : false,
+        runStatus: runStatuses.get(n.id),
+      },
     }));
     const rfEdges: FlowEdge[] = edges.map((e) => ({
       ...e,
@@ -833,7 +854,7 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
           : { ...(e.style ?? {}), opacity: 0.15 },
     }));
     return { visibleNodes: rfNodes, visibleEdges: rfEdges };
-  }, [edges, nodes, search]);
+  }, [edges, nodes, search, runStatuses]);
 
   return (
     <div
@@ -890,6 +911,23 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
             }}
           >
             Auto Layout
+          </button>
+          <button
+            type="button"
+            onClick={() => setRunOpen(true)}
+            className="rounded-md border border-amber-400 bg-amber-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-amber-500"
+            style={{
+              borderRadius: 8,
+              border: "1px solid #fbbf24",
+              background: "#d97706",
+              padding: "10px 14px",
+              color: "#ffffff",
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            ▶ Run
           </button>
           <input
             type="search"
@@ -1025,6 +1063,13 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
           </div>
         ) : null}
         <Legend />
+        {runOpen ? (
+          <RunPanel
+            workflow={workflowState}
+            onClose={() => setRunOpen(false)}
+            onResult={setRunResult}
+          />
+        ) : null}
         {assistantOpen ? (
           <WorkflowAssistantPanel
             document={assistantDocument}
