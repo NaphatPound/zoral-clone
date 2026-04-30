@@ -469,6 +469,8 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
   const [runResult, setRunResult] = useState<ExecutionResult | null>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalWidth, setTerminalWidth] = useState(420);
+  const [rightPanelWidth, setRightPanelWidth] = useState(400);
+  const rightDragStartRef = useRef<{ x: number; width: number } | null>(null);
   const [workflowChangeFlash, setWorkflowChangeFlash] = useState<string | null>(null);
   const runStatuses = useMemo(
     () => (runResult ? statusByNodeId(runResult) : new Map<string, StepStatus>()),
@@ -1247,44 +1249,80 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
           </ReactFlow>
         </div>
       </div>
-      <aside
-        className="w-[400px] border-l border-slate-700 bg-slate-900"
-        style={{
-          width: 400,
-          borderLeft: "1px solid rgba(51, 65, 85, 0.95)",
-          background: "#0f172a",
-          color: "#e2e8f0",
-        }}
-      >
-        <DetailsPanel
-          node={selectedNode}
-          edge={selectedEdge}
-          onNodeChange={(patch) => {
-            if (selection?.type !== "node") return;
-            setWorkflowState((current) =>
-              updateWorkflowNode(current, selection.id, patch),
-            );
-            setNodes((current) =>
-              current.map((node) => {
-                if (node.id !== selection.id) return node;
-                const nextNode = { ...node.data.node, ...patch };
-                return {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    label: nextNode.name,
-                    node: nextNode,
-                  },
-                };
-              }),
-            );
+      {selection ? (
+        <aside
+          style={{
+            position: "relative",
+            width: rightPanelWidth,
+            flexShrink: 0,
+            borderLeft: "1px solid rgba(51, 65, 85, 0.95)",
+            background: "#0f172a",
+            color: "#e2e8f0",
           }}
-          onEdgeChange={(patch) => {
-            if (selection?.type !== "edge") return;
-            handleEdgeChange(selection.id, patch);
-          }}
-        />
-      </aside>
+        >
+          <div
+            onMouseDown={(event) => {
+              rightDragStartRef.current = {
+                x: event.clientX,
+                width: rightPanelWidth,
+              };
+              const onMove = (e: MouseEvent) => {
+                const start = rightDragStartRef.current;
+                if (!start) return;
+                // Dragging the left edge to the LEFT widens the panel.
+                const next = Math.min(800, Math.max(280, start.width - (e.clientX - start.x)));
+                setRightPanelWidth(next);
+              };
+              const onUp = () => {
+                rightDragStartRef.current = null;
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+              };
+              window.addEventListener("mousemove", onMove);
+              window.addEventListener("mouseup", onUp);
+            }}
+            title="Drag to resize"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: -3,
+              width: 6,
+              height: "100%",
+              cursor: "col-resize",
+              background: "transparent",
+              zIndex: 22,
+            }}
+          />
+          <DetailsPanel
+            node={selectedNode}
+            edge={selectedEdge}
+            onNodeChange={(patch) => {
+              if (selection?.type !== "node") return;
+              setWorkflowState((current) =>
+                updateWorkflowNode(current, selection.id, patch),
+              );
+              setNodes((current) =>
+                current.map((node) => {
+                  if (node.id !== selection.id) return node;
+                  const nextNode = { ...node.data.node, ...patch };
+                  return {
+                    ...node,
+                    data: {
+                      ...node.data,
+                      label: nextNode.name,
+                      node: nextNode,
+                    },
+                  };
+                }),
+              );
+            }}
+            onEdgeChange={(patch) => {
+              if (selection?.type !== "edge") return;
+              handleEdgeChange(selection.id, patch);
+            }}
+          />
+        </aside>
+      ) : null}
     </div>
   );
 }
