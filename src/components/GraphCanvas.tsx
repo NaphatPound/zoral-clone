@@ -24,6 +24,7 @@ import DetailsPanel from "./DetailsPanel";
 import Legend from "./Legend";
 import RunPanel from "./RunPanel";
 import StaticGraphPreview from "./StaticGraphPreview";
+import TerminalPanel from "./TerminalPanel";
 import WorkflowAssistantPanel from "./WorkflowAssistantPanel";
 import WorkflowEdgeView, { type FlowEdgeData } from "./WorkflowEdge";
 import {
@@ -466,6 +467,9 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
   }>({ state: "idle" });
   const [runOpen, setRunOpen] = useState(false);
   const [runResult, setRunResult] = useState<ExecutionResult | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalWidth, setTerminalWidth] = useState(420);
+  const [workflowChangeFlash, setWorkflowChangeFlash] = useState<string | null>(null);
   const runStatuses = useMemo(
     () => (runResult ? statusByNodeId(runResult) : new Map<string, StepStatus>()),
     [runResult],
@@ -484,6 +488,30 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
 
   useEffect(() => {
     setHydrated(true);
+  }, []);
+
+  // Watch saved-workflows/ via the WS endpoint exposed by server.js so the
+  // canvas can flash a banner when Claude Code (or any other tool) writes a
+  // new graph. Clicking the banner navigates to /workflows.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${proto}//${window.location.host}/api/workflow-watch`);
+    ws.addEventListener("message", (event) => {
+      try {
+        const msg = JSON.parse(event.data) as { type?: string; filePath?: string };
+        if (msg.type === "workflow:add" || msg.type === "workflow:change") {
+          const name = msg.filePath?.split("/").pop() ?? "workflow";
+          setWorkflowChangeFlash(`saved-workflows/${name} updated`);
+          window.setTimeout(() => setWorkflowChangeFlash(null), 6000);
+        }
+      } catch {
+        // ignore non-JSON
+      }
+    });
+    return () => {
+      try { ws.close(); } catch { /* ignore */ }
+    };
   }, []);
 
   useEffect(() => {
@@ -859,8 +887,47 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
   return (
     <div
       className="flex h-screen w-screen"
-      style={{ display: "flex", width: "100vw", height: "100vh", color: "#e2e8f0" }}
+      style={{
+        display: "flex",
+        width: "100vw",
+        height: "100vh",
+        color: "#e2e8f0",
+        paddingLeft: terminalOpen ? terminalWidth : 0,
+        transition: "padding-left 120ms ease",
+        boxSizing: "border-box",
+      }}
     >
+      <TerminalPanel
+        open={terminalOpen}
+        width={terminalWidth}
+        onClose={() => setTerminalOpen(false)}
+        onResize={setTerminalWidth}
+      />
+      {workflowChangeFlash ? (
+        <div
+          style={{
+            position: "fixed",
+            top: 96,
+            left: terminalOpen ? terminalWidth + 16 : 16,
+            zIndex: 35,
+            borderRadius: 8,
+            border: "1px solid rgba(34,197,94,0.45)",
+            background: "rgba(15,23,42,0.94)",
+            padding: "8px 14px",
+            color: "#bbf7d0",
+            fontSize: 12,
+            boxShadow: "0 10px 24px rgba(15,23,42,0.45)",
+          }}
+        >
+          ✓ {workflowChangeFlash} —{" "}
+          <a
+            href="/workflows"
+            style={{ color: "#86efac", textDecoration: "underline" }}
+          >
+            open list
+          </a>
+        </div>
+      ) : null}
       <div
         ref={canvasRef}
         className="relative flex-1"
@@ -878,6 +945,24 @@ export default function GraphCanvas({ workflow }: { workflow: Workflow }) {
             gap: 8,
           }}
         >
+          <button
+            type="button"
+            onClick={() => setTerminalOpen((prev) => !prev)}
+            className="rounded-md border border-slate-500 bg-slate-800 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-slate-700"
+            style={{
+              borderRadius: 8,
+              border: "1px solid rgba(100,116,139,0.95)",
+              background: terminalOpen ? "#0f172a" : "#1e293b",
+              padding: "10px 14px",
+              color: "#e2e8f0",
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.18)",
+            }}
+            title="Toggle terminal panel"
+          >
+            {terminalOpen ? "⟨ Hide Terminal" : "⟩ Terminal"}
+          </button>
           <button
             type="button"
             onClick={openAssistant}
