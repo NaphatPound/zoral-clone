@@ -7,17 +7,12 @@ function node(
   partial: Partial<WorkflowNode> & Pick<WorkflowNode, "kind">,
 ): WorkflowNode {
   return {
+    ...partial,
     id,
     kind: partial.kind,
     tag: partial.tag ?? partial.kind,
     name: partial.name ?? id,
-    description: partial.description,
-    nextId: partial.nextId,
-    componentName: partial.componentName,
-    script: partial.script,
-    processOutputScript: partial.processOutputScript,
     boundaryEvents: partial.boundaryEvents ?? [],
-    position: partial.position,
     attributes: partial.attributes ?? {},
   };
 }
@@ -41,7 +36,7 @@ function workflow(nodes: WorkflowNode[], edges: WorkflowEdge[]): Workflow {
 }
 
 describe("runWorkflow", () => {
-  it("walks a linear flow Start → ScriptTask → End", () => {
+  it("walks a linear flow Start → ScriptTask → End", async () => {
     const wf = workflow(
       [
         node("s", { kind: "start" }),
@@ -54,13 +49,13 @@ describe("runWorkflow", () => {
       [edge("s", "t"), edge("t", "e")],
     );
 
-    const result = runWorkflow(wf, { value: 4 });
+    const result = await runWorkflow(wf, { value: 4 });
     expect(result.status).toBe("completed");
     expect(result.finalOutput).toEqual({ value: 4, doubled: 8 });
     expect(result.steps.map((s) => s.nodeId)).toEqual(["s", "t", "e"]);
   });
 
-  it("branches at a gateway by evaluating condition expressions", () => {
+  it("branches at a gateway by evaluating condition expressions", async () => {
     const wf = workflow(
       [
         node("s", { kind: "start" }),
@@ -96,18 +91,18 @@ describe("runWorkflow", () => {
       ],
     );
 
-    const a = runWorkflow(wf, { kind: "a" });
+    const a = await runWorkflow(wf, { kind: "a" });
     expect(a.status).toBe("completed");
     expect((a.finalOutput as { branch: string }).branch).toBe("a");
     expect(a.steps.some((s) => s.nodeId === "a-task")).toBe(true);
     expect(a.steps.some((s) => s.nodeId === "b-task")).toBe(false);
 
-    const b = runWorkflow(wf, { kind: "b" });
+    const b = await runWorkflow(wf, { kind: "b" });
     expect(b.status).toBe("completed");
     expect((b.finalOutput as { branch: string }).branch).toBe("b");
   });
 
-  it("calls registered components and applies process-output script", () => {
+  it("calls registered components and applies process-output script", async () => {
     const wf = workflow(
       [
         node("s", { kind: "start" }),
@@ -122,7 +117,7 @@ describe("runWorkflow", () => {
       [edge("s", "c"), edge("c", "e")],
     );
 
-    const result = runWorkflow(
+    const result = await runWorkflow(
       wf,
       { value: 7 },
       {
@@ -135,7 +130,7 @@ describe("runWorkflow", () => {
     expect(result.finalOutput).toEqual({ result: 14 });
   });
 
-  it("reports a script error and stops execution", () => {
+  it("reports a script error and stops execution", async () => {
     const wf = workflow(
       [
         node("s", { kind: "start" }),
@@ -145,14 +140,14 @@ describe("runWorkflow", () => {
       [edge("s", "t"), edge("t", "e")],
     );
 
-    const result = runWorkflow(wf, {});
+    const result = await runWorkflow(wf, {});
     expect(result.status).toBe("error");
     expect(result.error).toMatch(/boom/);
     expect(result.steps.find((s) => s.nodeId === "t")?.status).toBe("error");
     expect(result.steps.some((s) => s.nodeId === "e")).toBe(false);
   });
 
-  it("stops cleanly when an isolated condition node is reached and its expression is false", () => {
+  it("stops cleanly when an isolated condition node is reached and its expression is false", async () => {
     const wf = workflow(
       [
         node("s", { kind: "start" }),
@@ -165,16 +160,116 @@ describe("runWorkflow", () => {
       [edge("s", "c"), edge("c", "e")],
     );
 
-    const result = runWorkflow(wf, {});
+    const result = await runWorkflow(wf, {});
     expect(result.status).toBe("stopped");
     expect(result.steps.find((s) => s.nodeId === "c")?.status).toBe("skipped");
     expect(result.steps.some((s) => s.nodeId === "e")).toBe(false);
   });
 
-  it("returns an error when there is no start node", () => {
+  it("returns an error when there is no start node", async () => {
     const wf = workflow([node("e", { kind: "end" })], []);
-    const result = runWorkflow(wf, {});
+    const result = await runWorkflow(wf, {});
     expect(result.status).toBe("error");
     expect(result.error).toMatch(/start/i);
+  });
+
+  it("executes a graphqlQuery node against the configured endpoint", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    const fakeFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        url: typeof input === "string" ? input : input.toString(),
+        body: init?.body ? JSON.parse(init.body as string) : undefined,
+      });
+      return new Response(
+        JSON.stringify({ data: { books: [{ id: "1", title: "Kafka" }] } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const wf = workflow(
+      [
+        node("s", { kind: "start" }),
+        node("q", {
+          kind: "graphqlQuery",
+          tag: "GraphqlQueryTask",
+          graphqlEndpoint: "http://example/api/external/graphql",
+          graphqlQuery: "query Books($limit: Int!) { books(limit: $limit) { id title } }",
+          graphqlVariables: '{ "limit": 1 }',
+          graphqlOperationName: "Books",
+        }),
+        node("e", { kind: "end" }),
+      ],
+      [edge("s", "q"), edge("q", "e")],
+    );
+
+    const result = await runWorkflow(wf, {}, { fetchImpl: fakeFetch });
+    expect(result.status).toBe("completed");
+    expect(result.finalOutput).toEqual({ books: [{ id: "1", title: "Kafka" }] });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("http://example/api/external/graphql");
+    const body = calls[0].body as Record<string, unknown>;
+    expect(body.query).toContain("books(limit: $limit)");
+    expect(body.variables).toEqual({ limit: 1 });
+    expect(body.operationName).toBe("Books");
+  });
+
+  it("evaluates graphqlQuery variables as a JS expression with `input`", async () => {
+    let capturedVariables: unknown;
+    const fakeFetch: typeof fetch = (async (_url, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      capturedVariables = (body as Record<string, unknown>).variables;
+      return new Response(JSON.stringify({ data: { ok: true } }), {
+        status: 200,
+      });
+    }) as typeof fetch;
+
+    const wf = workflow(
+      [
+        node("s", { kind: "start" }),
+        node("q", {
+          kind: "graphqlQuery",
+          graphqlEndpoint: "http://example/graphql",
+          graphqlQuery: "query($id: ID!) { thing(id: $id) { id } }",
+          graphqlVariables: "return { id: input.targetId };",
+        }),
+        node("e", { kind: "end" }),
+      ],
+      [edge("s", "q"), edge("q", "e")],
+    );
+
+    const result = await runWorkflow(
+      wf,
+      { targetId: "abc" },
+      { fetchImpl: fakeFetch },
+    );
+    expect(result.status).toBe("completed");
+    expect(capturedVariables).toEqual({ id: "abc" });
+  });
+
+  it("propagates GraphQL `errors` payload as an execution error", async () => {
+    const fakeFetch: typeof fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          errors: [{ message: "Cannot query field `foo` on type `Book`." }],
+        }),
+        { status: 200 },
+      )) as typeof fetch;
+
+    const wf = workflow(
+      [
+        node("s", { kind: "start" }),
+        node("q", {
+          kind: "graphqlQuery",
+          graphqlEndpoint: "http://example/graphql",
+          graphqlQuery: "{ foo }",
+        }),
+        node("e", { kind: "end" }),
+      ],
+      [edge("s", "q"), edge("q", "e")],
+    );
+
+    const result = await runWorkflow(wf, {}, { fetchImpl: fakeFetch });
+    expect(result.status).toBe("error");
+    expect(result.error).toMatch(/Cannot query field/);
   });
 });

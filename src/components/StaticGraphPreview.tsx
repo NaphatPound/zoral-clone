@@ -52,6 +52,13 @@ const KIND_COLORS: Record<
     text: "#0f172a",
     accent: "#94a3b8",
   },
+  graphqlQuery: {
+    fill: "#115e59",
+    stroke: "#2dd4bf",
+    label: "#99f6e4",
+    text: "#f0fdfa",
+    accent: "#2dd4bf",
+  },
   unknown: {
     fill: "#334155",
     stroke: "#94a3b8",

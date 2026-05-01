@@ -9,6 +9,7 @@ const KIND_COLORS: Record<NodeKind, string> = {
   scriptTask: "bg-violet-700 border-violet-400",
   gateway: "bg-amber-600 border-amber-400",
   condition: "bg-slate-100 border-slate-300",
+  graphqlQuery: "bg-teal-700 border-teal-400",
   unknown: "bg-slate-700 border-slate-500",
 };
 
@@ -19,6 +20,7 @@ const KIND_STYLES: Record<NodeKind, { background: string; borderColor: string; c
   scriptTask: { background: "#7c3aed", borderColor: "#a78bfa", color: "#ffffff" },
   gateway: { background: "#d97706", borderColor: "#f59e0b", color: "#ffffff" },
   condition: { background: "#f8fafc", borderColor: "#cbd5e1", color: "#0f172a" },
+  graphqlQuery: { background: "#0f766e", borderColor: "#2dd4bf", color: "#ffffff" },
   unknown: { background: "#475569", borderColor: "#94a3b8", color: "#ffffff" },
 };
 
@@ -160,6 +162,23 @@ export default function NodeCard({ data }: { data: NodeCardData }) {
       {!isCondition && node.componentName ? (
         <div className="mt-1 text-[11px] opacity-80" style={{ marginTop: 6, fontSize: 11, opacity: 0.82 }}>
           component: {node.componentName}
+        </div>
+      ) : null}
+      {node.kind === "graphqlQuery" && (node.graphqlSavedQueryId || node.graphqlEndpoint) ? (
+        <div
+          className="mt-1 text-[11px] opacity-80"
+          style={{
+            marginTop: 6,
+            fontSize: 11,
+            opacity: 0.82,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            maxWidth: 220,
+          }}
+          title={node.graphqlSavedQueryId ?? node.graphqlEndpoint}
+        >
+          {node.graphqlSavedQueryId ? `saved: ${node.graphqlSavedQueryId}` : node.graphqlEndpoint}
         </div>
       ) : null}
       {!isCondition && node.boundaryEvents.length > 0 ? (

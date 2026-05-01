@@ -164,6 +164,23 @@ const NODE_TEMPLATES: NodeTemplate[] = [
     }),
   },
   {
+    key: "graphqlQuery",
+    label: "GraphQL Query (ADW)",
+    hint: "Send a GraphQL query to the ADW Query service and pass the data field downstream.",
+    create: (id, position) => ({
+      id,
+      kind: "graphqlQuery",
+      tag: "GraphqlQueryTask",
+      name: `GraphQL ${id}`,
+      description: "Calls /api/external/graphql on the ADW Query service.",
+      position,
+      boundaryEvents: [],
+      attributes: {},
+      graphqlEndpoint: "http://localhost:3001/api/external/graphql",
+      graphqlQuery: "{\n  __schema { queryType { name } }\n}",
+    }),
+  },
+  {
     key: "end",
     label: "End Event",
     hint: "Terminate the workflow path.",
@@ -342,7 +359,17 @@ function updateWorkflowNode(
   patch: Partial<
     Pick<
       WorkflowNode,
-      "name" | "description" | "componentName" | "script" | "processOutputScript"
+      | "name"
+      | "description"
+      | "componentName"
+      | "script"
+      | "processOutputScript"
+      | "graphqlEndpoint"
+      | "graphqlQuery"
+      | "graphqlVariables"
+      | "graphqlOperationName"
+      | "graphqlApiKey"
+      | "graphqlSavedQueryId"
     >
   >,
 ): Workflow {

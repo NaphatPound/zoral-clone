@@ -1,17 +1,27 @@
 "use client";
+import { useState } from "react";
 import type { WorkflowEdge, WorkflowNode } from "@/lib/types";
+import GraphqlQueryPicker, {
+  type SavedQuerySummary,
+} from "./GraphqlQueryPicker";
+
+type EditableNodeFields =
+  | "name"
+  | "description"
+  | "componentName"
+  | "script"
+  | "processOutputScript"
+  | "graphqlEndpoint"
+  | "graphqlQuery"
+  | "graphqlVariables"
+  | "graphqlOperationName"
+  | "graphqlApiKey"
+  | "graphqlSavedQueryId";
 
 interface DetailsPanelProps {
   node: WorkflowNode | null;
   edge: WorkflowEdge | null;
-  onNodeChange: (
-    patch: Partial<
-      Pick<
-        WorkflowNode,
-        "name" | "description" | "componentName" | "script" | "processOutputScript"
-      >
-    >,
-  ) => void;
+  onNodeChange: (patch: Partial<Pick<WorkflowNode, EditableNodeFields>>) => void;
   onEdgeChange: (
     patch: Partial<Pick<WorkflowEdge, "label" | "condition">>,
   ) => void;
@@ -27,6 +37,8 @@ export default function DetailsPanel({
   onNodeChange,
   onEdgeChange,
 }: DetailsPanelProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   if (!node && !edge) {
     return (
       <div
@@ -125,7 +137,20 @@ export default function DetailsPanel({
     activeNode!.kind === "scriptTask" || activeNode!.script !== undefined;
   const showProcessOutput =
     activeNode!.kind === "componentTask" ||
+    activeNode!.kind === "graphqlQuery" ||
     activeNode!.processOutputScript !== undefined;
+  const showGraphql = activeNode!.kind === "graphqlQuery";
+
+  function applySavedQuery(item: SavedQuerySummary) {
+    onNodeChange({
+      graphqlSavedQueryId: item.id,
+      graphqlQuery: item.query,
+      graphqlOperationName: item.operationName,
+      graphqlVariables: item.variables
+        ? JSON.stringify(item.variables, null, 2)
+        : activeNode!.graphqlVariables,
+    });
+  }
 
   const payload = {
     id: activeNode!.id,
@@ -135,6 +160,9 @@ export default function DetailsPanel({
     description: activeNode!.description,
     nextId: activeNode!.nextId,
     componentName: activeNode!.componentName,
+    graphqlEndpoint: activeNode!.graphqlEndpoint,
+    graphqlSavedQueryId: activeNode!.graphqlSavedQueryId,
+    graphqlOperationName: activeNode!.graphqlOperationName,
     boundaryEvents: activeNode!.boundaryEvents,
     position: activeNode!.position,
     attributes: activeNode!.attributes,
@@ -230,6 +258,158 @@ export default function DetailsPanel({
                 />
               </label>
             ) : null}
+            {showGraphql ? (
+              <>
+                <div
+                  style={{
+                    marginTop: 4,
+                    padding: 10,
+                    border: "1px dashed rgba(45,212,191,0.55)",
+                    borderRadius: 8,
+                    background: "rgba(15,118,110,0.08)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 11,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        color: "#5eead4",
+                      }}
+                    >
+                      ADW Query
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen(true)}
+                      style={{
+                        background: "#0d9488",
+                        border: "1px solid #2dd4bf",
+                        color: "#ffffff",
+                        borderRadius: 8,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Browse Saved Queries
+                    </button>
+                  </div>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                      GraphQL Endpoint
+                    </span>
+                    <input
+                      type="text"
+                      value={activeNode!.graphqlEndpoint ?? ""}
+                      placeholder="http://localhost:3001/api/external/graphql"
+                      onChange={(e) =>
+                        onNodeChange({
+                          graphqlEndpoint: optionalValue(e.target.value),
+                        })
+                      }
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                      Saved Query Id
+                    </span>
+                    <input
+                      type="text"
+                      value={activeNode!.graphqlSavedQueryId ?? ""}
+                      placeholder="(none — entered manually)"
+                      onChange={(e) =>
+                        onNodeChange({
+                          graphqlSavedQueryId: optionalValue(e.target.value),
+                        })
+                      }
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                      Query Body
+                    </span>
+                    <textarea
+                      value={activeNode!.graphqlQuery ?? ""}
+                      onChange={(e) =>
+                        onNodeChange({
+                          graphqlQuery: optionalValue(e.target.value),
+                        })
+                      }
+                      rows={8}
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-teal-200 outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                      Variables (JSON or JS expression returning object — has
+                      access to `input`)
+                    </span>
+                    <textarea
+                      value={activeNode!.graphqlVariables ?? ""}
+                      placeholder='{ "limit": 10 }'
+                      onChange={(e) =>
+                        onNodeChange({
+                          graphqlVariables: optionalValue(e.target.value),
+                        })
+                      }
+                      rows={4}
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                      Operation Name (optional)
+                    </span>
+                    <input
+                      type="text"
+                      value={activeNode!.graphqlOperationName ?? ""}
+                      onChange={(e) =>
+                        onNodeChange({
+                          graphqlOperationName: optionalValue(e.target.value),
+                        })
+                      }
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                      API Key (optional — sent as x-api-key)
+                    </span>
+                    <input
+                      type="password"
+                      value={activeNode!.graphqlApiKey ?? ""}
+                      onChange={(e) =>
+                        onNodeChange({
+                          graphqlApiKey: optionalValue(e.target.value),
+                        })
+                      }
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-sky-400"
+                    />
+                  </label>
+                </div>
+              </>
+            ) : null}
           </div>
         </section>
         <section>
@@ -239,6 +419,17 @@ export default function DetailsPanel({
           </pre>
         </section>
       </div>
+      {pickerOpen && showGraphql ? (
+        <GraphqlQueryPicker
+          endpoint={
+            activeNode!.graphqlEndpoint?.trim() ||
+            "http://localhost:3001/api/external/graphql"
+          }
+          apiKey={activeNode!.graphqlApiKey}
+          onClose={() => setPickerOpen(false)}
+          onPick={(item) => applySavedQuery(item)}
+        />
+      ) : null}
     </div>
   );
 }

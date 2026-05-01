@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { listWorkflowSummaries } from "@/lib/workflow-store";
-import { corsPreflight, withCors } from "@/lib/cors";
+import { corsPreflight, resolveBaseUrl, withCors } from "@/lib/cors";
 
 export async function OPTIONS() {
   return corsPreflight();
 }
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  const baseUrl = resolveBaseUrl(request);
   const summaries = await listWorkflowSummaries();
   const ids = summaries.map((s) => s.id);
 
@@ -16,9 +15,9 @@ export async function GET(request: Request) {
     openapi: "3.0.3",
     info: {
       title: "Zoral Clone Workflow API",
-      version: "1.0.0",
+      version: "1.2.0",
       description:
-        "Run, list, fetch, save, and delete low-code workflow graphs by id. Workflows are JSON files stored in the active workspace folder; calling /run executes the graph using the same interpreter the canvas uses (script tasks, condition expressions, gateway branching, end-of-flow return value).",
+        "Run, list, fetch, save, and delete low-code workflow graphs by id. Workflows are JSON files stored in the active workspace folder; calling /run executes the graph using the same interpreter the canvas uses (script tasks, condition expressions, gateway branching, graphqlQuery nodes that POST to the ADW Query service, end-of-flow return value).",
     },
     servers: [{ url: baseUrl }],
     components: {
@@ -41,6 +40,88 @@ export async function GET(request: Request) {
             edges: { type: "array", items: { $ref: "#/components/schemas/Edge" } },
           },
         },
+        WorkflowSample: {
+          type: "object",
+          required: ["name", "input"],
+          properties: {
+            name: { type: "string" },
+            description: { type: "string" },
+            input: { description: "Sample input passed to /run." },
+            output: { description: "Sample of expected finalOutput." },
+          },
+        },
+        CatalogEndpoint: {
+          type: "object",
+          required: ["id", "name", "method", "path", "runUrl"],
+          properties: {
+            id: { type: "string" },
+            name: { type: "string" },
+            description: { type: "string" },
+            method: { type: "string", enum: ["POST"] },
+            path: { type: "string" },
+            runUrl: { type: "string" },
+            rawWorkflowUrl: { type: "string" },
+            openApiRef: { type: "string" },
+            tags: { type: "array", items: { type: "string" } },
+            nodeCount: { type: "integer" },
+            edgeCount: { type: "integer" },
+            modifiedAt: { type: "string", format: "date-time" },
+            inputSchema: { description: "JSON Schema or free-form descriptor." },
+            outputSchema: { description: "JSON Schema or free-form descriptor." },
+            samples: {
+              type: "array",
+              items: {
+                allOf: [
+                  { $ref: "#/components/schemas/WorkflowSample" },
+                  {
+                    type: "object",
+                    properties: { exampleCurl: { type: "string" } },
+                  },
+                ],
+              },
+            },
+            graphqlNodes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  nodeId: { type: "string" },
+                  name: { type: "string" },
+                  endpoint: { type: "string" },
+                  operationName: { type: "string" },
+                  savedQueryId: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        Catalog: {
+          type: "object",
+          required: ["service", "endpoints", "generatedAt"],
+          properties: {
+            service: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                baseUrl: { type: "string" },
+                version: { type: "string" },
+                description: { type: "string" },
+                docs: {
+                  type: "object",
+                  properties: {
+                    openapi: { type: "string" },
+                    integration: { type: "string" },
+                  },
+                },
+              },
+            },
+            generatedAt: { type: "string", format: "date-time" },
+            endpoints: {
+              type: "array",
+              items: { $ref: "#/components/schemas/CatalogEndpoint" },
+            },
+          },
+        },
         Node: {
           type: "object",
           required: ["id", "kind", "tag", "name", "boundaryEvents", "attributes"],
@@ -55,6 +136,7 @@ export async function GET(request: Request) {
                 "scriptTask",
                 "gateway",
                 "condition",
+                "graphqlQuery",
                 "unknown",
               ],
             },
@@ -73,6 +155,36 @@ export async function GET(request: Request) {
             position: {
               type: "object",
               properties: { x: { type: "number" }, y: { type: "number" } },
+            },
+            graphqlEndpoint: {
+              type: "string",
+              description:
+                "graphqlQuery only — full URL of the ADW Query GraphQL endpoint, typically http://localhost:3001/api/external/graphql.",
+            },
+            graphqlQuery: {
+              type: "string",
+              description:
+                "graphqlQuery only — GraphQL document body sent to the endpoint.",
+            },
+            graphqlVariables: {
+              type: "string",
+              description:
+                "graphqlQuery only — either JSON object or a JS expression (with access to `input`) that evaluates to the variables object.",
+            },
+            graphqlOperationName: {
+              type: "string",
+              description:
+                "graphqlQuery only — optional GraphQL operationName.",
+            },
+            graphqlApiKey: {
+              type: "string",
+              description:
+                "graphqlQuery only — optional ADW Query API key, sent as `x-api-key` header.",
+            },
+            graphqlSavedQueryId: {
+              type: "string",
+              description:
+                "graphqlQuery only — id of the saved query in the ADW Query service this node was populated from. Informational; the runtime sends `graphqlQuery` directly without re-resolving the id.",
             },
           },
         },
@@ -154,6 +266,23 @@ export async function GET(request: Request) {
       },
     },
     paths: {
+      "/api/catalog": {
+        get: {
+          summary:
+            "Self-describing API catalog. One call returns every workflow exposed by this service, with method, path, samples, and OpenAPI cross-reference. Designed for frontends or AI agents that want to discover and pick endpoints dynamically — analogous to /api/saved-queries on the ADW Query service.",
+          tags: ["meta"],
+          responses: {
+            "200": {
+              description: "Catalog snapshot",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/Catalog" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/health": {
         get: {
           summary: "Service ping",

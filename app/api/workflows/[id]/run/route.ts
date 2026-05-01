@@ -21,7 +21,7 @@ interface RunResponse {
   status: "completed" | "stopped" | "error";
   finalOutput?: unknown;
   error?: string;
-  steps?: ReturnType<typeof runWorkflow>["steps"];
+  steps?: Awaited<ReturnType<typeof runWorkflow>>["steps"];
   workflowId: string;
   durationMs: number;
 }
@@ -92,12 +92,13 @@ export async function POST(
   }
 
   const start = Date.now();
-  const result = runWorkflow(workflow, body.input ?? {}, {
+  const result = await runWorkflow(workflow, body.input ?? {}, {
     components,
     maxSteps:
       typeof body.maxSteps === "number" && body.maxSteps > 0
         ? Math.min(body.maxSteps, 5_000)
         : undefined,
+    graphqlDefaultEndpoint: process.env.ADW_QUERY_DEFAULT_ENDPOINT,
   });
   const durationMs = Date.now() - start;
 

@@ -8,3 +8,6 @@ tsconfig.tsbuildinfo
 generated-docs
 saved-workflows
 .zoral-workspace.json
+.env
+.env.local
+.env.*.local

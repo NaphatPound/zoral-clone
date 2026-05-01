@@ -8,6 +8,7 @@ const ENTRIES: { kind: NodeKind; label: string; className: string }[] = [
   { kind: "scriptTask", label: "Script task", className: "bg-violet-700" },
   { kind: "gateway", label: "Gateway", className: "bg-amber-600" },
   { kind: "condition", label: "Condition (if/else)", className: "bg-slate-100" },
+  { kind: "graphqlQuery", label: "GraphQL query (ADW)", className: "bg-teal-700" },
   { kind: "unknown", label: "Unknown", className: "bg-slate-700" },
 ];
 
@@ -18,6 +19,7 @@ const KIND_DOT_COLORS: Record<NodeKind, string> = {
   scriptTask: "#7c3aed",
   gateway: "#d97706",
   condition: "#f8fafc",
+  graphqlQuery: "#0f766e",
   unknown: "#475569",
 };
 

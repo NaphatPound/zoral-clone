@@ -5,6 +5,7 @@ export type NodeKind =
   | "scriptTask"
   | "gateway"
   | "condition"
+  | "graphqlQuery"
   | "unknown";
 
 export interface BoundaryEvent {
@@ -27,6 +28,12 @@ export interface WorkflowNode {
   boundaryEvents: BoundaryEvent[];
   position?: { x: number; y: number };
   attributes: Record<string, string>;
+  graphqlEndpoint?: string;
+  graphqlQuery?: string;
+  graphqlVariables?: string;
+  graphqlOperationName?: string;
+  graphqlApiKey?: string;
+  graphqlSavedQueryId?: string;
 }
 
 export type EdgeKind = "sequence" | "boundary";
@@ -47,6 +54,13 @@ export interface GlobalVariable {
   isRevertible: boolean;
 }
 
+export interface WorkflowSample {
+  name: string;
+  description?: string;
+  input: unknown;
+  output?: unknown;
+}
+
 export interface WorkflowMeta {
   description?: string;
   formatVersion?: string;
@@ -54,6 +68,10 @@ export interface WorkflowMeta {
   runtimeName?: string;
   allowBackNavigation?: boolean;
   isLightweight?: boolean;
+  tags?: string[];
+  inputSchema?: unknown;
+  outputSchema?: unknown;
+  samples?: WorkflowSample[];
 }
 
 export interface Workflow {

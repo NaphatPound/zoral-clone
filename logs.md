@@ -4,6 +4,98 @@ Living log of bugs found, features updated, and their fixes. Newest first.
 
 ---
 
+## 2026-05-02 — Feature: API catalog for remote consumers
+
+### What changed
+
+Added `GET /api/catalog`, a self-describing snapshot intended for any
+external frontend or AI agent that wants to discover the APIs this
+project exposes — same shape and intent as the saved-queries flow this
+project uses against the ADW Query service. One call returns the service
+metadata (name, version, doc links) plus an `endpoints[]` array where
+every saved workflow shows up as a callable API with method, path,
+absolute `runUrl`, JSON Schemas (when set on the workflow's meta), and
+copy-pasteable `exampleCurl` strings.
+
+### Surface additions
+
+- `WorkflowMeta` gained optional `tags`, `inputSchema`, `outputSchema`,
+  `samples[]` fields. Existing workflows without those fields work
+  unchanged; new fields are echoed through the catalog.
+- New file `src/lib/catalog.ts` builds the response.
+- New route `app/api/catalog/route.ts` (GET, OPTIONS, CORS).
+- OpenAPI spec at `/api/openapi.json` bumped to `1.2.0`, added
+  `Catalog` / `CatalogEndpoint` / `WorkflowSample` schemas, added the
+  `/api/catalog` path entry.
+- New top-level `API_INTEGRATION.md` — AI-agent-friendly walkthrough of
+  discovery + invocation, covering both the catalog flow and the run
+  endpoint contract.
+
+### Bonus bug fix
+
+`servers[0].url` in the OpenAPI spec was reporting `http://localhost:3000`
+because Next's `request.url` ignores our custom server's port. Pulled out
+a `resolveBaseUrl()` helper in `lib/cors.ts` that prefers the Host
+header, fixing both `/api/openapi.json` and the new `/api/catalog`
+endpoint.
+
+### Demo workflows
+
+Backfilled samples + JSON Schemas on the two demo workflows so the
+catalog has populated examples out of the box:
+
+- `adw-demo-books-list` — 3 samples (default, top-3, top-10), full
+  input/output schemas
+- `adw-demo-book-with-author` — 3 samples covering the if/else gateway
+  branches
+
+---
+
+## 2026-05-02 — Feature: graphqlQuery node + ADW Query saved-queries
+
+### What changed
+
+Added a new workflow node kind `graphqlQuery` that POSTs to the ADW Query
+service (the sister project at `/Users/administrator/Documents/project/adw-query`,
+default `http://localhost:3001/api/external/graphql`). The node returns
+`response.data` into the workflow pipeline and surfaces GraphQL `errors[]`
+through the standard step-error path.
+
+### Surface
+
+- **Type:** `WorkflowNode.kind === "graphqlQuery"`. New optional fields:
+  `graphqlEndpoint`, `graphqlQuery`, `graphqlVariables`, `graphqlOperationName`,
+  `graphqlApiKey`, `graphqlSavedQueryId`.
+- **Variables:** plain JSON object **or** a JS expression body. Expressions
+  receive `input` and must return a plain object — same `new Function`
+  caveats as `scriptTask`.
+- **Runtime:** `runWorkflow` is now `async`. The two callers
+  (`/api/workflows/[id]/run` and `RunPanel`) and the test suite were
+  updated together.
+- **Canvas:** new template "GraphQL Query (ADW)" in `GraphCanvas`, teal
+  color in `NodeCard` / `Legend` / `StaticGraphPreview`, dedicated editor
+  card in `DetailsPanel`.
+- **Picker:** `src/components/GraphqlQueryPicker.tsx` — pulls
+  `<endpoint-host>/api/saved-queries` and lets the user check one to fill
+  the node's query/operationName/variables in place.
+- **OpenAPI:** spec at `/api/openapi.json` bumped to `1.1.0` with the new
+  enum value and node fields documented.
+
+### Cross-project dependency
+
+The picker requires the ADW Query service to expose
+`GET /api/saved-queries`. If that service runs on a different origin than
+zoral-clone, set `GRAPHQL_CORS_ORIGINS` there to whitelist
+`http://localhost:3002`.
+
+### Server-side default endpoint
+
+`/api/workflows/[id]/run` reads `ADW_QUERY_DEFAULT_ENDPOINT` from env and
+passes it as `graphqlDefaultEndpoint` so nodes that omit a per-node
+endpoint still resolve.
+
+---
+
 ## 2026-04-24 — Review pass: 2 bugs + 4 UX enhancements
 
 ### Bug 1 — `toReactFlow` position normalisation was biased by unpositioned nodes

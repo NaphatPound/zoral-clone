@@ -30,7 +30,7 @@ export default function RunPanel({ workflow, onClose, onResult }: RunPanelProps)
   const [parseError, setParseError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
-  const handleRun = () => {
+  const handleRun = async () => {
     setRunning(true);
     setParseError(null);
     let parsed: unknown = {};
@@ -47,10 +47,19 @@ export default function RunPanel({ workflow, onClose, onResult }: RunPanelProps)
         return;
       }
     }
-    const next = runWorkflow(workflow, parsed);
-    setResult(next);
-    onResult(next);
-    setRunning(false);
+    try {
+      const next = await runWorkflow(workflow, parsed);
+      setResult(next);
+      onResult(next);
+    } catch (error) {
+      setParseError(
+        error instanceof Error
+          ? `Run failed: ${error.message}`
+          : "Run failed",
+      );
+    } finally {
+      setRunning(false);
+    }
   };
 
   const handleClear = () => {

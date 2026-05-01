@@ -25,6 +25,8 @@ export interface ExecutionResult {
 export interface RuntimeOptions {
   components?: Record<string, (input: unknown) => unknown>;
   maxSteps?: number;
+  fetchImpl?: typeof fetch;
+  graphqlDefaultEndpoint?: string;
 }
 
 function evalScript(
@@ -54,11 +56,109 @@ function buildOutgoing(workflow: Workflow): Map<string, string[]> {
   return outgoing;
 }
 
-export function runWorkflow(
+async function executeGraphqlQuery(
+  node: WorkflowNode,
+  input: unknown,
+  options: RuntimeOptions,
+): Promise<unknown> {
+  const endpoint =
+    node.graphqlEndpoint?.trim() || options.graphqlDefaultEndpoint?.trim();
+  if (!endpoint) {
+    throw new Error(
+      "graphqlQuery node has no endpoint (set node.graphqlEndpoint or pass graphqlDefaultEndpoint)",
+    );
+  }
+  const queryText = node.graphqlQuery?.trim();
+  if (!queryText) {
+    throw new Error("graphqlQuery node has no query body");
+  }
+
+  let variables: Record<string, unknown> | undefined;
+  if (node.graphqlVariables && node.graphqlVariables.trim()) {
+    variables = evalVariables(node.graphqlVariables, input);
+  }
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json",
+  };
+  if (node.graphqlApiKey && node.graphqlApiKey.trim()) {
+    headers["x-api-key"] = node.graphqlApiKey.trim();
+  }
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(endpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      query: queryText,
+      variables,
+      operationName: node.graphqlOperationName?.trim() || undefined,
+    }),
+  });
+  const text = await response.text();
+  let payload: unknown;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(
+      `graphqlQuery endpoint returned non-JSON (status ${response.status}): ${text.slice(0, 200)}`,
+    );
+  }
+
+  if (!response.ok) {
+    const message =
+      payload && typeof payload === "object" && payload !== null && "message" in payload
+        ? String((payload as Record<string, unknown>).message)
+        : `HTTP ${response.status}`;
+    throw new Error(`graphqlQuery transport error: ${message}`);
+  }
+
+  if (
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as Record<string, unknown>).errors) &&
+    ((payload as Record<string, unknown>).errors as unknown[]).length > 0
+  ) {
+    const errors = (payload as Record<string, unknown>).errors as Array<{
+      message?: string;
+    }>;
+    throw new Error(
+      `graphqlQuery errors: ${errors.map((entry) => entry.message ?? "unknown").join("; ")}`,
+    );
+  }
+
+  return (payload as Record<string, unknown>)?.data ?? payload;
+}
+
+function evalVariables(source: string, input: unknown): Record<string, unknown> {
+  const trimmed = source.trim();
+  // Plain JSON path first — no closure over `input`.
+  if (trimmed.startsWith("{")) {
+    try {
+      return JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      // Fall through to script-style evaluation.
+    }
+  }
+  // eslint-disable-next-line no-new-func
+  const fn = new Function("input", trimmed);
+  const value = fn(input);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  throw new Error(
+    "graphqlQuery variables must evaluate to a plain object (got " +
+      typeof value +
+      ")",
+  );
+}
+
+export async function runWorkflow(
   workflow: Workflow,
   initialInput: unknown,
   options: RuntimeOptions = {},
-): ExecutionResult {
+): Promise<ExecutionResult> {
   const components = options.components ?? {};
   const maxSteps = options.maxSteps ?? 500;
   const nodesById = new Map(workflow.nodes.map((n) => [n.id, n]));
@@ -134,6 +234,18 @@ export function runWorkflow(
               : node.componentName
                 ? `stub (no impl for "${node.componentName}")`
                 : "no component bound";
+          nextId = targets[0] ?? null;
+          break;
+        }
+        case "graphqlQuery": {
+          const result = await executeGraphqlQuery(node, before, options);
+          after = node.processOutputScript
+            ? evalScript(node.processOutputScript, result, "output")
+            : result;
+          value = after;
+          branchInfo = node.graphqlSavedQueryId
+            ? `saved query ${node.graphqlSavedQueryId}`
+            : `${node.graphqlEndpoint ?? options.graphqlDefaultEndpoint ?? "(no endpoint)"}`;
           nextId = targets[0] ?? null;
           break;
         }

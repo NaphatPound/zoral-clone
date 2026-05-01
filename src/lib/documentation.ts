@@ -15,6 +15,7 @@ const KIND_LABELS: Record<WorkflowNode["kind"], string> = {
   scriptTask: "script task",
   gateway: "gateway",
   condition: "condition (if/else)",
+  graphqlQuery: "GraphQL query (ADW Query service)",
   unknown: "workflow node",
 };
 
