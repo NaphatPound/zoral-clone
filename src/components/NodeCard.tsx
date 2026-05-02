@@ -10,6 +10,7 @@ const KIND_COLORS: Record<NodeKind, string> = {
   gateway: "bg-amber-600 border-amber-400",
   condition: "bg-slate-100 border-slate-300",
   graphqlQuery: "bg-teal-700 border-teal-400",
+  note: "bg-yellow-300 border-yellow-500",
   unknown: "bg-slate-700 border-slate-500",
 };
 
@@ -21,6 +22,7 @@ const KIND_STYLES: Record<NodeKind, { background: string; borderColor: string; c
   gateway: { background: "#d97706", borderColor: "#f59e0b", color: "#ffffff" },
   condition: { background: "#f8fafc", borderColor: "#cbd5e1", color: "#0f172a" },
   graphqlQuery: { background: "#0f766e", borderColor: "#2dd4bf", color: "#ffffff" },
+  note: { background: "#fde68a", borderColor: "#f59e0b", color: "#1f2937" },
   unknown: { background: "#475569", borderColor: "#94a3b8", color: "#ffffff" },
 };
 
@@ -52,11 +54,15 @@ const HANDLE_STYLE = {
   border: "2px solid #e2e8f0",
 };
 
-function HandlesForKind(_props: { kind: NodeKind }) {
-  // Every node — including gateway, condition, start, and end — exposes a
-  // single target on the left and a single source on the right so any node
-  // can be wired up like a simple box. Branch semantics now live on the
-  // condition nodes themselves.
+function HandlesForKind(props: { kind: NodeKind }) {
+  // Note nodes are decorative — they sit beside the workflow and shouldn't
+  // be wired into the execution flow. Skip handles entirely so users can't
+  // accidentally connect them.
+  if (props.kind === "note") return null;
+  // Every other node — including gateway, condition, start, and end —
+  // exposes a single target on the left and a single source on the right so
+  // any node can be wired up like a simple box. Branch semantics live on
+  // the condition nodes themselves.
   return (
     <>
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
@@ -71,6 +77,7 @@ export default function NodeCard({ data }: { data: NodeCardData }) {
   const inlineStyle = KIND_STYLES[node.kind] ?? KIND_STYLES.unknown;
   const runRing = runStatus ? RUN_STATUS_RING[runStatus] : null;
   const isCondition = node.kind === "condition";
+  const isNote = node.kind === "note";
   const conditionPreview =
     isCondition && node.description
       ? node.description
@@ -78,24 +85,29 @@ export default function NodeCard({ data }: { data: NodeCardData }) {
           .map((part) => part.trim())
           .find(Boolean)
       : undefined;
+  const notePreview = isNote && node.noteText ? node.noteText.trim() : "";
+  const noteAttachmentCount = node.noteAttachments?.length ?? 0;
   return (
     <div
       className={`rounded-lg border px-3 py-2 shadow-lg transition-opacity ${color} ${
         dim ? "opacity-25" : "opacity-100"
       }`}
       style={{
-        minWidth: isCondition ? 140 : 180,
-        maxWidth: isCondition ? 240 : undefined,
-        borderRadius: 12,
+        minWidth: isCondition ? 140 : isNote ? 200 : 180,
+        maxWidth: isCondition ? 240 : isNote ? 260 : undefined,
+        borderRadius: isNote ? 4 : 12,
         border: `1px solid ${inlineStyle.borderColor}`,
         background: inlineStyle.background,
         padding: isCondition ? "6px 10px" : "10px 12px",
         color: inlineStyle.color,
         boxShadow: runRing
           ? `${runRing}, 0 12px 24px rgba(15, 23, 42, 0.28)`
-          : "0 12px 24px rgba(15, 23, 42, 0.28)",
+          : isNote
+            ? "2px 6px 14px rgba(15, 23, 42, 0.45)"
+            : "0 12px 24px rgba(15, 23, 42, 0.28)",
         opacity: dim ? 0.25 : 1,
         position: "relative",
+        transform: isNote ? "rotate(-1.5deg)" : undefined,
       }}
     >
       <HandlesForKind kind={node.kind} />
@@ -188,6 +200,52 @@ export default function NodeCard({ data }: { data: NodeCardData }) {
         >
           ⚠ {node.boundaryEvents.length} boundary
         </div>
+      ) : null}
+      {isNote ? (
+        <>
+          {notePreview ? (
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 11,
+                lineHeight: 1.4,
+                color: "#1f2937",
+                whiteSpace: "pre-wrap",
+                display: "-webkit-box",
+                WebkitLineClamp: 4,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+              title={node.noteText}
+            >
+              {notePreview}
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 11,
+                fontStyle: "italic",
+                color: "#92400e",
+              }}
+            >
+              (empty note — click to edit)
+            </div>
+          )}
+          {noteAttachmentCount > 0 ? (
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 10,
+                color: "#92400e",
+                fontWeight: 700,
+              }}
+            >
+              📎 {noteAttachmentCount} attachment
+              {noteAttachmentCount === 1 ? "" : "s"}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

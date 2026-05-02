@@ -194,6 +194,22 @@ const NODE_TEMPLATES: NodeTemplate[] = [
       attributes: {},
     }),
   },
+  {
+    key: "note",
+    label: "Note (for Claude)",
+    hint: "Decorative sticky note. Attach images/video/audio/text and ask Claude to turn the brief into code.",
+    create: (id, position) => ({
+      id,
+      kind: "note",
+      tag: "Note",
+      name: `Note ${id}`,
+      noteText: "",
+      noteAttachments: [],
+      position,
+      boundaryEvents: [],
+      attributes: {},
+    }),
+  },
 ];
 
 function downloadJson(workflow: Workflow) {
@@ -1416,6 +1432,29 @@ export default function GraphCanvas({
           <DetailsPanel
             node={selectedNode}
             edge={selectedEdge}
+            onAskClaude={(noteNode) => {
+              // Open terminal (the panel auto-launches `claude` CLI on
+              // first open); then queue a prompt that points Claude at
+              // the on-disk note.md plus any attachments.
+              setTerminalOpen(true);
+              const noteId = noteNode.id;
+              const targetHint = noteNode.name
+                ? ` for the node "${noteNode.name}" (id: ${noteId})`
+                : "";
+              const prompt =
+                `Read the brief at notes/${noteId}/note.md and every file ` +
+                `next to it in notes/${noteId}/, then implement the workflow ` +
+                `it describes${targetHint}. The note may contain images, ` +
+                `videos, audio clips, or text — treat each attachment as part ` +
+                `of the requirement.\n`;
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("zoral:terminal-send", {
+                    detail: { text: prompt },
+                  }),
+                );
+              }
+            }}
             onNodeChange={(patch) => {
               if (selection?.type !== "node") return;
               setWorkflowState((current) =>

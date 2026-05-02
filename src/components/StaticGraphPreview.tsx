@@ -59,6 +59,13 @@ const KIND_COLORS: Record<
     text: "#f0fdfa",
     accent: "#2dd4bf",
   },
+  note: {
+    fill: "#fde68a",
+    stroke: "#f59e0b",
+    label: "#92400e",
+    text: "#1f2937",
+    accent: "#f59e0b",
+  },
   unknown: {
     fill: "#334155",
     stroke: "#94a3b8",

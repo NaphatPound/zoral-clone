@@ -6,7 +6,17 @@ export type NodeKind =
   | "gateway"
   | "condition"
   | "graphqlQuery"
+  | "note"
   | "unknown";
+
+export type NoteAttachmentKind = "image" | "video" | "audio" | "file";
+
+export interface NoteAttachment {
+  filename: string;
+  kind: NoteAttachmentKind;
+  size: number;
+  mime: string;
+}
 
 export interface BoundaryEvent {
   name: string;
@@ -36,6 +46,8 @@ export interface WorkflowNode {
   graphqlOperationName?: string;
   graphqlApiKey?: string;
   graphqlSavedQueryId?: string;
+  noteText?: string;
+  noteAttachments?: NoteAttachment[];
 }
 
 export type EdgeKind = "sequence" | "boundary";

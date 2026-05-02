@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getActiveWorkspace } from "./workspace";
+import { syncNotesToDisk } from "./notes";
 import type { Workflow } from "./types";
 
 export interface WorkflowSummary {
@@ -95,6 +96,14 @@ export async function saveWorkflow(
       : `${slug}-${Date.now()}`;
   const filePath = path.join(dir, `${id}.json`);
   await fs.writeFile(filePath, JSON.stringify(workflow, null, 2), "utf8");
+  // Mirror note nodes into <workspace>/notes/<id>/note.md so the embedded
+  // Claude terminal can read them with plain `cat` / Read tool.
+  try {
+    const noteNodes = (workflow.nodes ?? []).filter((n) => n.kind === "note");
+    await syncNotesToDisk(noteNodes);
+  } catch {
+    // Note sync is best-effort — never block a workflow save on it.
+  }
   return { id, filePath };
 }
 

@@ -234,6 +234,35 @@ export default function TerminalPanel({
     resizePtyToFit();
   }, [width, resizePtyToFit]);
 
+  // Listen for cross-component requests to inject text (used by the Note
+  // editor's "Ask Claude" button). The request is queued client-side and
+  // flushed once the PTY is ready, so the user can click the button before
+  // the shell has finished spawning.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: string }>).detail;
+      const text = detail?.text;
+      if (!text) return;
+      const tryFlush = () => {
+        const ws = wsRef.current;
+        const tid = terminalIdRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN || !tid) return false;
+        ws.send(JSON.stringify({ type: "input", terminalId: tid, data: text }));
+        return true;
+      };
+      if (tryFlush()) return;
+      // Poll briefly until the PTY is ready (terminal just opened).
+      let attempts = 0;
+      const id = setInterval(() => {
+        attempts += 1;
+        if (tryFlush() || attempts >= 40) clearInterval(id);
+      }, 250);
+    };
+    window.addEventListener("zoral:terminal-send", handler);
+    return () => window.removeEventListener("zoral:terminal-send", handler);
+  }, [open]);
+
   const handleSendPrompt = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const tid = terminalIdRef.current;

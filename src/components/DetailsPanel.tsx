@@ -5,6 +5,7 @@ import GraphqlQueryPicker, {
   type SavedQuerySummary,
 } from "./GraphqlQueryPicker";
 import ScriptEditorModal from "./ScriptEditorModal";
+import NoteEditor from "./NoteEditor";
 
 type EditableNodeFields =
   | "name"
@@ -19,7 +20,9 @@ type EditableNodeFields =
   | "graphqlVariables"
   | "graphqlOperationName"
   | "graphqlApiKey"
-  | "graphqlSavedQueryId";
+  | "graphqlSavedQueryId"
+  | "noteText"
+  | "noteAttachments";
 
 interface DetailsPanelProps {
   node: WorkflowNode | null;
@@ -28,6 +31,7 @@ interface DetailsPanelProps {
   onEdgeChange: (
     patch: Partial<Pick<WorkflowEdge, "label" | "condition">>,
   ) => void;
+  onAskClaude?: (node: WorkflowNode) => void;
 }
 
 function optionalValue(value: string): string | undefined {
@@ -39,6 +43,7 @@ export default function DetailsPanel({
   edge,
   onNodeChange,
   onEdgeChange,
+  onAskClaude,
 }: DetailsPanelProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [scriptEditorOpen, setScriptEditorOpen] = useState(false);
@@ -144,6 +149,10 @@ export default function DetailsPanel({
     activeNode!.kind === "graphqlQuery" ||
     activeNode!.processOutputScript !== undefined;
   const showGraphql = activeNode!.kind === "graphqlQuery";
+  const showNote =
+    activeNode!.kind === "note" ||
+    activeNode!.noteText !== undefined ||
+    (activeNode!.noteAttachments?.length ?? 0) > 0;
 
   function applySavedQuery(item: SavedQuerySummary) {
     onNodeChange({
@@ -326,6 +335,13 @@ export default function DetailsPanel({
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-amber-200 outline-none focus:border-sky-400"
                 />
               </label>
+            ) : null}
+            {showNote ? (
+              <NoteEditor
+                node={activeNode!}
+                onChange={(patch) => onNodeChange(patch)}
+                onAskClaude={(n) => onAskClaude?.(n)}
+              />
             ) : null}
             {showGraphql ? (
               <>

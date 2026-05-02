@@ -9,6 +9,7 @@ const ENTRIES: { kind: NodeKind; label: string; className: string }[] = [
   { kind: "gateway", label: "Gateway", className: "bg-amber-600" },
   { kind: "condition", label: "Condition (if/else)", className: "bg-slate-100" },
   { kind: "graphqlQuery", label: "GraphQL query (ADW)", className: "bg-teal-700" },
+  { kind: "note", label: "Note (sticky / brief for Claude)", className: "bg-yellow-300" },
   { kind: "unknown", label: "Unknown", className: "bg-slate-700" },
 ];
 
@@ -20,6 +21,7 @@ const KIND_DOT_COLORS: Record<NodeKind, string> = {
   gateway: "#d97706",
   condition: "#f8fafc",
   graphqlQuery: "#0f766e",
+  note: "#fde68a",
   unknown: "#475569",
 };
 
