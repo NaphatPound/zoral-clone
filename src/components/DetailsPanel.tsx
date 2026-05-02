@@ -4,12 +4,15 @@ import type { WorkflowEdge, WorkflowNode } from "@/lib/types";
 import GraphqlQueryPicker, {
   type SavedQuerySummary,
 } from "./GraphqlQueryPicker";
+import ScriptEditorModal from "./ScriptEditorModal";
 
 type EditableNodeFields =
   | "name"
   | "description"
   | "componentName"
   | "script"
+  | "scriptMode"
+  | "scriptBlocksJson"
   | "processOutputScript"
   | "graphqlEndpoint"
   | "graphqlQuery"
@@ -38,6 +41,7 @@ export default function DetailsPanel({
   onEdgeChange,
 }: DetailsPanelProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [scriptEditorOpen, setScriptEditorOpen] = useState(false);
 
   if (!node && !edge) {
     return (
@@ -227,19 +231,84 @@ export default function DetailsPanel({
               </label>
             ) : null}
             {showScript ? (
-              <label className="block space-y-1">
-                <span className="text-[11px] uppercase tracking-wider text-slate-400">
-                  Script
-                </span>
+              <div className="block space-y-1">
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <span className="text-[11px] uppercase tracking-wider text-slate-400">
+                    Script
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background:
+                          activeNode!.scriptMode === "blocks"
+                            ? "rgba(168, 85, 247, 0.2)"
+                            : "rgba(56, 189, 248, 0.18)",
+                        color:
+                          activeNode!.scriptMode === "blocks"
+                            ? "#e9d5ff"
+                            : "#bae6fd",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.4,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {activeNode!.scriptMode === "blocks" ? "blocks" : "js"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setScriptEditorOpen(true)}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        border: "1px solid rgba(56, 189, 248, 0.6)",
+                        background: "rgba(56, 189, 248, 0.12)",
+                        color: "#e0f2fe",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ⤢ Open Editor
+                    </button>
+                  </div>
+                </div>
                 <textarea
                   value={activeNode!.script ?? ""}
                   onChange={(e) =>
-                    onNodeChange({ script: optionalValue(e.target.value) })
+                    onNodeChange({
+                      script: optionalValue(e.target.value),
+                      // Editing the JS directly clears the block tree —
+                      // otherwise reopening blocks mode would silently
+                      // overwrite the user's text.
+                      scriptMode: "js",
+                      scriptBlocksJson: undefined,
+                    })
                   }
                   rows={8}
+                  readOnly={activeNode!.scriptMode === "blocks"}
                   className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs text-emerald-200 outline-none focus:border-sky-400"
+                  style={
+                    activeNode!.scriptMode === "blocks"
+                      ? { opacity: 0.85, cursor: "not-allowed" }
+                      : undefined
+                  }
+                  title={
+                    activeNode!.scriptMode === "blocks"
+                      ? "This script is generated from blocks. Open the editor to change it."
+                      : undefined
+                  }
                 />
-              </label>
+              </div>
             ) : null}
             {showProcessOutput ? (
               <label className="block space-y-1">
@@ -428,6 +497,24 @@ export default function DetailsPanel({
           apiKey={activeNode!.graphqlApiKey}
           onClose={() => setPickerOpen(false)}
           onPick={(item) => applySavedQuery(item)}
+        />
+      ) : null}
+      {showScript ? (
+        <ScriptEditorModal
+          open={scriptEditorOpen}
+          title={`${activeNode!.name || activeNode!.id}`}
+          initialScript={activeNode!.script ?? ""}
+          initialMode={activeNode!.scriptMode ?? "js"}
+          initialBlocksJson={activeNode!.scriptBlocksJson}
+          onCancel={() => setScriptEditorOpen(false)}
+          onSave={(result) => {
+            onNodeChange({
+              script: optionalValue(result.script),
+              scriptMode: result.scriptMode,
+              scriptBlocksJson: result.scriptBlocksJson,
+            });
+            setScriptEditorOpen(false);
+          }}
         />
       ) : null}
     </div>

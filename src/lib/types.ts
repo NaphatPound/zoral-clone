@@ -24,6 +24,8 @@ export interface WorkflowNode {
   nextId?: string;
   componentName?: string;
   script?: string;
+  scriptMode?: "js" | "blocks";
+  scriptBlocksJson?: string;
   processOutputScript?: string;
   boundaryEvents: BoundaryEvent[];
   position?: { x: number; y: number };
